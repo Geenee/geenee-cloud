@@ -1,0 +1,47 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+
+group = 'it.geenee'
+version = '0.1.0-SNAPSHOT'
+
+repositories {
+	mavenCentral()
+}
+
+// java configuration
+compileJava {
+	sourceCompatibility = '1.8'
+}
+
+// gradle build
+dependencies {
+	compile 'io.netty:netty-codec-http:4.0.34.Final'
+	compile 'com.jcraft:jzlib:1.1.3'
+	compile 'commons-codec:commons-codec:1.10'
+	testCompile 'junit:junit:4.12'
+}
+def mainClass = 'it.geenee.cloud.HttpSnoopClient'
+
+
+// gradle run -Dexec.args="..."
+task run(type: JavaExec) {
+	main = mainClass
+	classpath = sourceSets.main.runtimeClasspath
+
+	def execArgs = System.getProperty('exec.args')
+	if (execArgs)
+		args execArgs.split()
+}
+
+// gradle doc
+task doc(type: Javadoc) {
+	source = sourceSets.main.allJava
+	classpath = configurations.compile
+}
+
+// gradle install
+
+// gradle wrapper
+task wrapper(type: Wrapper) {
+	gradleVersion = '2.10'
+}
