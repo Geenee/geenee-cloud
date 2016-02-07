@@ -17,22 +17,22 @@ import it.geenee.cloud.*;
 /**
  * Base class for HTTP based upload and download
  */
-public abstract class HttpTransfer implements Transfer {
+public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer  {
 
-	public static final int PORT = 443;
+	//public static final int PORT = 443;
 
 	// needed to sign the requests using a provider specific algorithm
-	protected final HttpCloud cloud;
+	//protected final HttpCloud cloud;
 
 	// configuration
-	protected final Configuration configuration;
+	//protected final Configuration configuration;
 
 	protected final FileChannel file;
-	protected final String host;
+	//protected final String host;
 	protected final String remotePath;
 
 	// state of transfer
-	private State state = State.INITIATING;
+	//private State state = State.INITIATING;
 
 	// the HTTP ETag of the file in the cloud storage
 	protected String hash = null;
@@ -46,11 +46,11 @@ public abstract class HttpTransfer implements Transfer {
 	//Set<ChannelFuture> connectFutures = new HashSet<>();
 	//Set<ChannelFuture> closeFutures = new HashSet<>();
 	// set of active channels
-	Set<Channel> channels = new HashSet<>();
+	//Set<Channel> channels = new HashSet<>();
 
 	protected List<Part> parts;
 
-	protected static class Part implements Transfer.Part {
+	protected class Part implements Transfer.Part {
 		public final int index;
 		public final long offset;
 		public final int length;
@@ -110,6 +110,7 @@ public abstract class HttpTransfer implements Transfer {
 
 		public synchronized void setState(State state) {
 			this.state = state;
+			stateChange();
 		}
 
 		public synchronized boolean retry(int maxRetryCount) {
@@ -118,10 +119,11 @@ public abstract class HttpTransfer implements Transfer {
 				return true;
 			}
 			this.state = State.RETRY;
+			stateChange();
 			return false;
 		}
 	}
-
+/*
 	protected abstract class Handler extends SimpleChannelInboundHandler<HttpObject> {
 		// http response code
 		protected int responseCode = 0;
@@ -170,47 +172,53 @@ public abstract class HttpTransfer implements Transfer {
 			}
 		}
 
-		/**
+		/ **
 		 * Returns true if handler has failed
 		 * @return true if failed
-		 */
+		 * /
 		protected abstract boolean hasFailed();
 
-		/**
+		/ **
 		 * Increments the retry count and returns true if failed because maximum retry count has been reached
 		 * @return true if failed because maximum retry count has been reached
-		 */
+		 * /
 		public abstract boolean retry(int maxRetryCount);
 
-		/**
+		/ **
 		 * @return true if the status code indicates failure but a retry makes sense
-		 */
+		 * /
 		public boolean isRetryCode() {
 			return this.responseCode == 400
 					|| this.responseCode == 408
 					|| this.responseCode == 429;
 		}
 	}
-
+*/
 
 
 	public HttpTransfer(HttpCloud cloud, FileChannel file, String host, String remotePath, Configuration configuration) {
-		this.cloud = cloud;
-		this.configuration = configuration;
+		super(cloud, host, configuration, true);
+		//this.cloud = cloud;
+		//this.configuration = configuration;
 
 		this.file = file;
-		this.host = host;
+		//this.host = host;
 		this.remotePath = remotePath;
+	}
+
+	//@Override
+	//public synchronized State getState() {
+//		return this.state;
+//	}
+
+	@Override
+	public synchronized void waitForStateChange() throws InterruptedException {
+		wait();
 	}
 
 	@Override
 	public String getUrl() {
 		return this.host + this.remotePath;
-	}
-
-	@Override
-	public synchronized State getState() {
-		return this.state;
 	}
 
 	@Override
@@ -237,7 +245,7 @@ public abstract class HttpTransfer implements Transfer {
 	public String getId() {
 		return this.id;
 	}
-
+ /*
 	@Override
 	public void cancel() {
 		setState(State.FAILED);
@@ -250,13 +258,13 @@ public abstract class HttpTransfer implements Transfer {
 			}
 		}
 	}
-
+*/
 	// helpers
 
-	protected synchronized void setState(State state) {
-		this.state = state;
-	}
-
+	//protected synchronized void setState(State state) {
+	//	this.state = state;
+	//}
+/*
 	protected void connect(final Handler handler) {
 		int timeout = this.configuration.timeout;
 
@@ -371,7 +379,7 @@ public abstract class HttpTransfer implements Transfer {
 		int delay = this.configuration.timeout;
 		this.cloud.timer.newTimeout((timeout) -> connect(handler), delay, TimeUnit.SECONDS);
 	}
-
+*/
 	protected void startTransfer(long fileLength, String id) {
 		// create parts
 		long partSize = this.configuration.partSize;
@@ -434,13 +442,11 @@ public abstract class HttpTransfer implements Transfer {
 
 
 
-
+/*
 	protected synchronized void stateChange() {
 		notifyAll();
 	}
 
-	@Override
-	public synchronized void waitForStateChange() throws InterruptedException {
-		wait();
-	}
+
+*/
 }

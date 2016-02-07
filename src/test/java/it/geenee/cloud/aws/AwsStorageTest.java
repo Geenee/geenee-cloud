@@ -1,27 +1,52 @@
 package it.geenee.cloud.aws;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.util.Random;
+
 import it.geenee.cloud.*;
 
-import java.io.File;
-import java.io.RandomAccessFile;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.Assert;
 
 
 public class AwsStorageTest {
 	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-upload-testing");
 	String region = "eu-central-1";
 	String bucket = "efreet-recognition-testing";
-	String largeFileName = "largeFile"; // should be at least 20MB
-	String smallFileName = "smallFile"; // should be 0k - 100k
 
+	File smallFilePath = new File("smallTestFile");
+	int smallFileSize = 100000;
+	File largeFilePath = new File("largeTestFile");
+	int largeFileSize = 20000000;
+
+	void generateFile(File path, int size) throws IOException {
+		Random random = new Random(1337);
+		byte[] data = new byte[1000];
+		try (FileOutputStream f = new FileOutputStream(path)) {
+			for (int i = 0; i < size / 1000; ++i) {
+				random.nextBytes(data);
+				f.write(data);
+			}
+		}
+	}
+
+	@Before
+	public void generateFiles() throws IOException {
+		generateFile(smallFilePath, smallFileSize);
+		generateFile(largeFilePath, largeFileSize);
+	}
 
 	public void wait(Transfer transfer) throws InterruptedException {
 		System.out.println("START url: " + transfer.getUrl());
 		while (transfer.getState() == Transfer.State.INITIATING)
-			transfer.waitForStateChange();//Thread.sleep(100);
+			transfer.waitForStateChange();
 
-		//downloader.sync();
 		loop:
-		for (int t = 0; t < 10000000; ++t) {
+		while (true) {
 
 			StringBuilder b = new StringBuilder();
 			for (int i = 0; i < transfer.getPartCount(); ++i) {
@@ -47,8 +72,7 @@ public class AwsStorageTest {
 						break;
 				}
 			}
-			String s = b.toString();
-			System.out.printf("%4d %s\n", t, s);
+			System.out.println(b);
 
 			Transfer.State state = transfer.getState();
 			switch (state) {
@@ -60,12 +84,11 @@ public class AwsStorageTest {
 					break loop;
 			}
 
-			//Thread.sleep(100);
 			transfer.waitForStateChange();
 		}
 	}
 
-	public void testDownload(String fileName) throws Exception {
+	public void testDownload(File path) throws Exception {
 
 		Configuration configuration = Cloud.configure()
 				.region(region)
@@ -74,24 +97,17 @@ public class AwsStorageTest {
 		Cloud cloud = new AwsCloud(configuration);
 		Storage storage = cloud.getStorage();
 
-		File path = new File(fileName);
 		try (RandomAccessFile file = new RandomAccessFile(path, "rw")) {
-			Transfer downloader = storage.download(file.getChannel(), "/" + bucket + "/" + fileName, null);
+			Transfer downloader = storage.download(file.getChannel(), "/" + bucket + "/" + path.getName(), null);
 
 			wait(downloader);
+
+			// compare hash of local file with the hash (etag) returned by aws
+			Assert.assertEquals(downloader.getHash(), storage.calculateHash(file.getChannel()));
 		}
 	}
-	//@Test
-	public void testSmallDownload() throws Exception {
-		testDownload(smallFileName);
-	}
-	//@Test
-	public void testLargeDownload() throws Exception {
-		testDownload(largeFileName);
-	}
 
-
-	public void testUpload(String fileName) throws Exception {
+	public void testUpload(File path) throws Exception {
 
 		Cloud cloud = new AwsCloud();
 		Configuration configuration = Cloud.configure()
@@ -100,20 +116,25 @@ public class AwsStorageTest {
 				.build();
 		Storage storage = cloud.getStorage(configuration);
 
-		String name = "Referrer.key";
-		File path = new File(fileName);
 		try (RandomAccessFile file = new RandomAccessFile(path, "r")) {
-			Transfer uploader = storage.upload(file.getChannel(), "/efreet-recognition-testing/" + name);
+			Transfer uploader = storage.upload(file.getChannel(), "/" + bucket + "/" + path.getName());
 
 			wait(uploader);
+
+			// compare hash of local file with the hash (etag) returned by aws
+			Assert.assertEquals(uploader.getHash(), storage.calculateHash(file.getChannel()));
 		}
 	}
-	//@Test
-	public void testSmallUpload() throws Exception {
-		testUpload(smallFileName);
-	}
-	//@Test
-	public void testLargeUpload() throws Exception {
-		testUpload(largeFileName);
+
+	@Test
+	public void testTransfer() throws Exception {
+		testUpload(smallFilePath);
+		testUpload(largeFilePath);
+
+		smallFilePath.delete();
+		largeFilePath.delete();
+
+		testDownload(smallFilePath);
+		testDownload(largeFilePath);
 	}
 }

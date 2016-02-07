@@ -32,7 +32,6 @@ public class AwsUploader extends HttpTransfer {
 
 			// part is now initializing
 			this.part.setState(Part.State.INITIATING);
-			stateChange();
 
 			// add handler for file upload after http handler
 			ctx.pipeline().addAfter("http", "writer", new ChunkedWriteHandler());
@@ -74,13 +73,11 @@ public class AwsUploader extends HttpTransfer {
 
 					// set state of part to PROGRESS
 					this.part.setState(Part.State.PROGRESS);
-					stateChange();
 				} else if (this.responseCode / 100 == 2) {
 					// success
 
 					// set state of part to SUCCESS
 					this.part.setState(Part.State.DONE);
-					stateChange();
 
 					// part done, start next part or complete upload if no more parts
 					uploadDone(this.part, response.headers());
@@ -97,7 +94,7 @@ public class AwsUploader extends HttpTransfer {
 					}
 				} else {
 					// http error (e.g. 400)
-					//System.err.print(content.content().toString(HttpCloud.UTF_8));
+					//System.err.println(content.content().toString(HttpCloud.UTF_8));
 					if (content instanceof LastHttpContent) {
 						ctx.close();
 
@@ -142,7 +139,6 @@ public class AwsUploader extends HttpTransfer {
 		this.version = this.cloud.getVersion(headers);
 
 		setState(State.SUCCESS);
-		stateChange();
 	}
 
 	@Override

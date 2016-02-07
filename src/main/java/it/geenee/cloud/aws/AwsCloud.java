@@ -22,19 +22,20 @@ import java.util.*;
 
 import it.geenee.cloud.http.HttpCloud;
 import it.geenee.cloud.http.HttpDownloader;
-import it.geenee.cloud.http.HttpGetString;
 
 
 public class AwsCloud extends HttpCloud {
 
 	public static final String DEFAULT_REGION = "us-east-1";
+	public static final String EC2_VERSION = "&Version=2015-10-01";
+
 
 	/**
 	 * Constructor
 	 * @throws SSLException
 	 */
 	public AwsCloud() throws SSLException {
-		super(null);
+		this(null);
 	}
 
 	/**
@@ -105,7 +106,7 @@ public class AwsCloud extends HttpCloud {
 	// this instance
 
 	@Override
-	public Future<Instance> getInstance() {
+	public Future<Instance> requestInstance() {
 		return new AwsGetInstance(this, configuration);
 	}
 
@@ -115,16 +116,62 @@ public class AwsCloud extends HttpCloud {
 	public Compute getCompute(Configuration configuration) {
 		// merge global configuration with given configuration
 		final Configuration conf = this.configuration.merge(configuration);
+		final String host = getHost("ec2", conf.region);
 
 		return new Compute() {
 			@Override
-			public Future<Map<String, String>> getTags(String resourceId) {
-				String host = getHost("ec2", conf.region);
-
+			public Future<Map<String, String>> requestTags(String resourceId) {
 				return new AwsDescribeTags(AwsCloud.this, host, resourceId, conf);
 			}
+			@Override
+			public Instances instances() {
+				return new Instances() {
+					int index = 1;
+					StringBuilder filters = new StringBuilder();
+
+					@Override
+					public Instances filter(String key, String... values) {
+						this.filters.append("&Filter.").append(this.index).append(".Name=").append(encode(key));
+						int i = 1;
+						for (String value : values) {
+							this.filters.append("&Filter.").append(this.index).append(".Value.").append(i).append('=').append(encode(value));
+							++i;
+						}
+						++this.index;
+						return this;
+					}
+
+					@Override
+					public Instances filterZone(String... zones) {
+						return filter("availability-zone", zones);
+					}
+
+					@Override
+					public Instances filterTag(String key, String... values) {
+						return filter("tag:" + key, values);
+					}
+
+					@Override
+					public Instances filterTagKey(String... keys) {
+						return filter("tag-key", keys);
+					}
+
+					@Override
+					public Instances filterTagValue(String... values) {
+						return filter("tag-value", values);
+					}
+
+					@Override
+					public Future<List<Instance>> request() {
+						return new AwsDescribeInstances(AwsCloud.this, host, filters.toString(), conf);
+					}
+				};
+			}
+
 		};
 	}
+
+	//class Instances
 
 	// storage
 
@@ -132,6 +179,7 @@ public class AwsCloud extends HttpCloud {
 	public Storage getStorage(Configuration configuration) {
 		// merge global configuration with given configuration
 		final Configuration conf = this.configuration.merge(configuration);
+		final String host = getHost("s3", conf.region);
 
 		return new Storage() {
 			/**
@@ -178,7 +226,6 @@ public class AwsCloud extends HttpCloud {
 			public Transfer download(FileChannel file, String remotePath, String version) throws IOException {
 				assert remotePath.startsWith("/") : "remote path must be absolute (start with '/')";
 
-				String host = getHost("s3", conf.region);
 				return new HttpDownloader(AwsCloud.this, file, host, remotePath, version, conf);
 			}
 
@@ -186,7 +233,6 @@ public class AwsCloud extends HttpCloud {
 			public Transfer upload(FileChannel file, String remotePath) throws IOException {
 				assert remotePath.startsWith("/") : "remote path must be absolute (start with '/')";
 
-				String host = getHost("s3", conf.region);
 				if (file.size() <= conf.partSize)
 					return new AwsUploader(AwsCloud.this, file, host, remotePath, conf);
 				return new AwsMultipartUploader(AwsCloud.this, file, host, remotePath, conf);
@@ -216,16 +262,19 @@ public class AwsCloud extends HttpCloud {
 	 * @throws Exception
 	 */
 	public void signRequest(HttpRequest request, byte[] contentSha256, Configuration configuration) throws Exception {
+		boolean useQuery = false;
 		HttpHeaders headers = request.headers();
 
 		// hex encode SHA-256 hash of content and set header
 		String contentSha256Hex = Hex.encodeHexString(contentSha256);
 		headers.set("x-amz-content-sha256", contentSha256Hex);
 
-		// get date and time
+		// get date and time and set header
 		Date currentDate = new Date();
 		String time = DATE_FORMAT.format(currentDate);
 		String date = time.substring(0, 8);
+		if (!useQuery)
+			headers.set("x-amz-date", time);
 
 		// get request method (e.g. "GET")
 		String method = request.getMethod().name();
@@ -263,7 +312,6 @@ public class AwsCloud extends HttpCloud {
 		String signedHeaders = signedHeadersBuilder.toString();
 
 
-		boolean useQuery = false;
 		if (useQuery) {
 			// signature in query parameters
 			uri = uri + (uri.indexOf('?') == -1 ? '?' : '&') + "X-Amz-Algorithm=AWS4-HMAC-SHA256"
@@ -271,10 +319,6 @@ public class AwsCloud extends HttpCloud {
 					+ "&X-Amz-Date=" + time
 					+ "&X-Amz-Expires=600"
 					+ "&X-Amz-SignedHeaders=" + encode(signedHeaders);
-		} else {
-			// signature in authorization header
-			// add time to headers (is not in signed headers)
-			headers.set("x-amz-date", time);
 		}
 
 		// split uri into path and canonical queries
@@ -335,15 +379,6 @@ public class AwsCloud extends HttpCloud {
 			String authorizationHeader = "AWS4-HMAC-SHA256 Credential=" + credential + ",SignedHeaders=" + signedHeaders + ",Signature=" + signature;
 			headers.set(HttpHeaders.Names.AUTHORIZATION, authorizationHeader);
 		}
-	}
-
-	static String encode(String s) {
-		try {
-			return URLEncoder.encode(s, "UTF-8").replace("+", "%20");
-		} catch (Exception e) {
-			// should not happen
-		}
-		return s;
 	}
 
 	@Override

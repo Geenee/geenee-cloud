@@ -9,7 +9,7 @@ import it.geenee.cloud.*;
  * AWS get instance data of the instance we are currently running on
  * http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
  */
-public class AwsGetInstance extends HttpQuery<Instance> {
+public class AwsGetInstance extends HttpFuture<Instance> {
 	public static final String HOST = "instance-data";
 	public static final String INSTANCE_ID = "/latest/meta-data/instance-id";
 	public static final String ZONE = "/latest/meta-data/placement/availability-zone";
@@ -18,7 +18,7 @@ public class AwsGetInstance extends HttpQuery<Instance> {
 	String zone = null;
 
 	// channel handler to upload file via PUT
-	class GetHandler extends HttpQuery.Handler {
+	class GetHandler extends HttpFuture.Handler {
 		String path;
 
 		int retryCount = 0;
@@ -110,8 +110,11 @@ public class AwsGetInstance extends HttpQuery<Instance> {
 		if (this.instanceId != null && this.zone != null) {
 			setSuccess(new Instance(
 					this.instanceId,
+					null,
 					this.zone,
-					this.zone.substring(0, this.zone.length() - 1)
+					this.zone.substring(0, this.zone.length() - 1),
+					null,
+					null
 			));
 		}
 	}

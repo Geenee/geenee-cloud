@@ -1,7 +1,9 @@
 package it.geenee.cloud;
 
 
-public interface Transfer {
+import io.netty.util.concurrent.Future;
+
+public interface Transfer extends Future<Void> {
 
 	enum State {
 		/**
@@ -42,14 +44,16 @@ public interface Transfer {
 	State getState();
 
 	/**
-	 * Cancels the transfer. If not complete yet, getState() will return FAILED
-	 */
-	void cancel();
-
-	/**
-	 * Wait until download is finished
+	 * Wait until the state of the transfer or of one part changes
 	 */
 	void waitForStateChange() throws InterruptedException;
+
+	/**
+	 * Cancels the transfer. If not done yet, getState() will return CANCELLED
+	 */
+	default void cancel() {
+		cancel(false);
+	}
 
 
 

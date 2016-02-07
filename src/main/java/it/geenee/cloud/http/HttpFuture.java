@@ -19,9 +19,9 @@ import it.geenee.cloud.*;
 
 
 /**
- * Base class for HTTP queries
+ * Base class for asynchronous HTTP requests that includes a base class for a ChannelInboundHandler
  */
-public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V> {
+public abstract class HttpFuture<V> implements Future<V> {
 
 	public static final int HTTP_PORT = 80;
 	public static final int HTTPS_PORT = 443;
@@ -51,7 +51,7 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 	Throwable notedCause;
 
 	// future listeners
-	List<GenericFutureListener<HttpQuery<V>>> listeners = new ArrayList<>();
+	List<GenericFutureListener<HttpFuture<V>>> listeners = new ArrayList<>();
 
 
 
@@ -74,7 +74,7 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 			// all exceptions (e.g. IOExcepton from local file) lead to immediate failure of transfer
 			setFailed(cause);
 
-			// setFailed also closes the connection
+			// setFailed also closes all connections
 		}
 
 		@Override
@@ -133,7 +133,7 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 
 
 
-	public HttpQuery(HttpCloud cloud, String host, Configuration configuration, boolean https) {
+	public HttpFuture(HttpCloud cloud, String host, Configuration configuration, boolean https) {
 		this.cloud = cloud;
 		this.host = host;
 		this.configuration = configuration;
@@ -183,8 +183,22 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 
 	@Override
 	public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-		// TODO
-		return get();
+		long startMillis = System.currentTimeMillis();
+		long timeoutMillis = unit.toMillis(timeout);
+
+		// wait until timeout or done
+		long passedMillis;
+		while ((passedMillis = System.currentTimeMillis() - startMillis) < timeoutMillis
+				&& !(this.state == Transfer.State.SUCCESS || this.state == Transfer.State.FAILED || this.state == Transfer.State.CANCELLED)) {
+			wait(timeoutMillis - passedMillis);
+		}
+
+		// act according to state
+		if (this.state == Transfer.State.SUCCESS)
+			return this.value;
+		else if (this.state == Transfer.State.FAILED)
+			throw new ExecutionException(this.cause);
+		throw new CancellationException();
 	}
 
 	// io.netty.util.concurrent.Future<V>
@@ -207,7 +221,7 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 	@Override
 	public synchronized Future<V> addListener(GenericFutureListener<? extends Future<? super V>> listener) {
 		// is this the way to do it?
-		GenericFutureListener<HttpQuery<V>> l = (GenericFutureListener<HttpQuery<V>>) listener;
+		GenericFutureListener<HttpFuture<V>> l = (GenericFutureListener<HttpFuture<V>>) listener;
 		this.listeners.add(l);
 		return this;
 	}
@@ -215,7 +229,7 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 	@Override
 	public synchronized Future<V> addListeners(GenericFutureListener<? extends Future<? super V>>... listeners) {
 		for (GenericFutureListener<? extends Future<? super V>> listener : listeners) {
-			GenericFutureListener<HttpQuery<V>> l = (GenericFutureListener<HttpQuery<V>>) listener;
+			GenericFutureListener<HttpFuture<V>> l = (GenericFutureListener<HttpFuture<V>>) listener;
 			this.listeners.add(l);
 		}
 		return this;
@@ -283,29 +297,45 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 
 	@Override
 	public synchronized boolean await(long timeout, TimeUnit unit) throws InterruptedException {
-		// TODO
-		// wait until done
-		//while (!(this.state == Transfer.State.SUCCESS || this.state == Transfer.State.FAILED || this.state == Transfer.State.CANCELLED))
-		//	wait(timeoutMillis);
-		return false;
+		return await(unit.toMillis(timeout));
 	}
 
 	@Override
 	public synchronized boolean await(long timeoutMillis) throws InterruptedException {
-		// TODO
-		return false;
+		long startMillis = System.currentTimeMillis();
+
+		// wait until timeout or done
+		long passedMillis;
+		while ((passedMillis = System.currentTimeMillis() - startMillis) < timeoutMillis
+				&& !(this.state == Transfer.State.SUCCESS || this.state == Transfer.State.FAILED || this.state == Transfer.State.CANCELLED)) {
+			wait(timeoutMillis - passedMillis);
+		}
+
+		// return true if success
+		return this.state == Transfer.State.SUCCESS;
 	}
 
 	@Override
 	public synchronized boolean awaitUninterruptibly(long timeout, TimeUnit unit) {
-		// TODO
-		return false;
+		return awaitUninterruptibly(unit.toMillis(timeout));
 	}
 
 	@Override
 	public synchronized boolean awaitUninterruptibly(long timeoutMillis) {
-		// TODO
-		return false;
+		long startMillis = System.currentTimeMillis();
+
+		// wait until timeout or done
+		long passedMillis;
+		while ((passedMillis = System.currentTimeMillis() - startMillis) < timeoutMillis
+				&& !(this.state == Transfer.State.SUCCESS || this.state == Transfer.State.FAILED || this.state == Transfer.State.CANCELLED)) {
+			try {
+				wait(timeoutMillis - passedMillis);
+			} catch (InterruptedException e) {
+			}
+		}
+
+		// return true if success
+		return this.state == Transfer.State.SUCCESS;
 	}
 
 	@Override
@@ -321,9 +351,9 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 		notifyAll();
 	}
 
-	//protected synchronized Transfer.State getState() {
-	//	return this.state;
-	//}
+	public synchronized Transfer.State getState() {
+		return this.state;
+	}
 
 	protected void connect(final Handler handler) {
 		int timeout = this.configuration.timeout;
@@ -422,7 +452,7 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 		});
 	}
 
-	void fail(Handler handler) {
+	protected void fail(Handler handler) {
 		// check if transfer is already done (failed or cancelled)
 		if (isDone())
 			return;
@@ -475,7 +505,7 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 		setDone(Transfer.State.SUCCESS);
 	}
 
-	// set to done state. The caller must synchronize on this
+	// set to done state (SUCCESS, FAILED or CANCELLED). The caller must synchronize on this
 	protected void setDone(Transfer.State state) {
 		// set state
 		this.state = state;
@@ -484,7 +514,7 @@ public abstract class HttpQuery<V> implements io.netty.util.concurrent.Future<V>
 		notifyAll();
 
 		// notify listeners
-		for (GenericFutureListener<HttpQuery<V>> listener : listeners) {
+		for (GenericFutureListener<HttpFuture<V>> listener : listeners) {
 			try {
 				listener.operationComplete(this);
 			} catch (Exception e) {

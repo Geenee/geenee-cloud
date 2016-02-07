@@ -15,6 +15,7 @@ import org.apache.commons.codec.binary.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLException;
+import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
@@ -176,6 +177,16 @@ public abstract class HttpCloud implements Cloud {
 	 * @return version parameter
 	 */
 	public abstract String getVersionParameter();
+
+	public static String encode(String s) {
+		try {
+			String e = URLEncoder.encode(s, "UTF-8");
+			return e.replace("+", "%20");
+		} catch (Exception e) {
+			// should not happen
+		}
+		return s;
+	}
 
 	public static byte[] collectContent(byte[] data, HttpContent content) {
 		ByteBuf buf = content.content();

@@ -18,7 +18,6 @@ public class CompleteMultipartUpload {
 		@XmlElement(name = "ETag")
 		public String eTag;
 	}
-
 	@XmlElement(name = "Part")
 	public List<Part> parts = new ArrayList<>();
 

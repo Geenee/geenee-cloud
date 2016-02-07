@@ -2,8 +2,7 @@ package it.geenee.cloud.aws;
 
 import it.geenee.cloud.*;
 
-import java.io.File;
-import java.io.RandomAccessFile;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
@@ -16,19 +15,19 @@ public class AwsComputeTest {
 	String region = "us-east-1";
 	String instanceId = "i-0e57209551c14c5e5";
 
-	@Test
+	//@Test
 	public void testGetInstance() throws Exception {
-		//HttpQuery.HTTP_PORT = 8080;
+		//HttpFuture.HTTP_PORT = 8080;
 		//AwsGetInstance.HOST = "localhost";
 
 		Cloud cloud = new AwsCloud(Cloud.configure().timeout(1).build());
 
 		try {
-			Instance instance = cloud.getInstance().get();
-			System.out.println(instance.id);
+			Instance instance = cloud.getInstance();
+			System.out.println(instance.instanceId);
 			System.out.println(instance.zone);
 			System.out.println(instance.region);
-			Assert.assertFalse(instance.id.isEmpty());
+			Assert.assertFalse(instance.instanceId.isEmpty());
 			Assert.assertFalse(instance.zone.isEmpty());
 			Assert.assertFalse(instance.region.isEmpty());
 		} catch (ExecutionException e) {
@@ -38,6 +37,26 @@ public class AwsComputeTest {
 	}
 
 	@Test
+	public void testInstances() throws Exception {
+		Configuration configuration = Cloud.configure()
+				.region(region)
+				.credentials(credentials)
+				.build();
+		Cloud cloud = new AwsCloud(configuration);
+		Compute compute = cloud.getCompute();
+
+		List<Instance> instances;
+
+		instances = compute.instances().filterTagKey("Role").filterTagValue("efreet-master", "foo bar").get();
+		Assert.assertEquals(1, instances.size());
+		System.out.println(instances.toString());
+
+		instances = compute.instances().filterTag("Role", "efreet-master").get();
+		Assert.assertEquals(1, instances.size());
+		System.out.println(instances.toString());
+	}
+
+	//@Test
 	public void testTags() throws Exception {
 		Configuration configuration = Cloud.configure()
 				.region(region)
@@ -46,7 +65,7 @@ public class AwsComputeTest {
 		Cloud cloud = new AwsCloud(configuration);
 		Compute compute = cloud.getCompute();
 
-		Map<String, String> tags = compute.getTags(instanceId).get();
+		Map<String, String> tags = compute.getTags(instanceId);
 
 		System.out.println(tags.toString());
 	}

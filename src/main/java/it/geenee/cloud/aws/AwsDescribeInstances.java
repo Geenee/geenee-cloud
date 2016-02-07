@@ -1,8 +1,8 @@
 package it.geenee.cloud.aws;
 
 import java.io.*;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
@@ -17,13 +17,13 @@ import javax.xml.bind.Unmarshaller;
 
 /**
  * AWS describe tags
- * http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeTags.html
+ * http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeInstances.html
  */
-public class AwsDescribeTags extends HttpFuture<Map<String, String>> {
+public class AwsDescribeInstances extends HttpFuture<List<Instance>> {
 
 	// channel handler to upload file via PUT
 	class TagsHandler extends HttpFuture.Handler {
-		String resourceId;
+		String filters;
 
 		int retryCount = 0;
 
@@ -31,8 +31,8 @@ public class AwsDescribeTags extends HttpFuture<Map<String, String>> {
 		byte[] content;
 
 
-		TagsHandler(String resourceId) {
-			this.resourceId = resourceId;
+		TagsHandler(String filters) {
+			this.filters = filters;
 		}
 
 		@Override
@@ -40,7 +40,7 @@ public class AwsDescribeTags extends HttpFuture<Map<String, String>> {
 			// connection is established: send http request to server
 
 			// build uri for describe tags (http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeTags.html)
-			String uri = "/?Action=DescribeTags&Filter.1.Name=resource-id&Filter.1.Value.1=" + this.resourceId + AwsCloud.EC2_VERSION;
+			String uri = "/?Action=DescribeInstances" + this.filters + AwsCloud.EC2_VERSION;
 
 			// build http request
 			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri);
@@ -71,18 +71,31 @@ public class AwsDescribeTags extends HttpFuture<Map<String, String>> {
 					if (content instanceof LastHttpContent) {
 						// parse xml
 						//System.out.println(new String(this.content, HttpCloud.UTF_8));
-						JAXBContext jc = JAXBContext.newInstance(DescribeTagsResponse.class);
+						JAXBContext jc = JAXBContext.newInstance(DescribeInstancesResponse.class);
 						Unmarshaller unmarshaller = jc.createUnmarshaller();
-						DescribeTagsResponse response = (DescribeTagsResponse) unmarshaller.unmarshal(new ByteArrayInputStream(this.content));
+						DescribeInstancesResponse response = (DescribeInstancesResponse) unmarshaller.unmarshal(new ByteArrayInputStream(this.content));
 
-						// describe tags done
-						Map<String, String> map = new HashMap<>();
-						if (response.tagSet != null && response.tagSet.items != null) {
-							for (DescribeTagsResponse.Item item : response.tagSet.items) {
-								map.put(item.key, item.value);
+						// describe instances done
+						List<Instance> list = new ArrayList<>();
+						if (response.reservationSet != null && response.reservationSet.items != null) {
+							for (DescribeInstancesResponse.ReservationItem reservation : response.reservationSet.items) {
+								if (reservation.instancesSet != null && reservation.instancesSet.items != null) {
+									for (DescribeInstancesResponse.InstanceItem instance : reservation.instancesSet.items) {
+										String zone = null;
+										if (instance.placement != null)
+											zone = instance.placement.availabilityZone;
+										list.add(new Instance(
+												instance.instanceId,
+												reservation.reservationId,
+												zone,
+												zone.substring(0, zone.length()-1),
+												instance.privateIpAddress,
+												instance.ipAddress));
+									}
+								}
 							}
 						}
-						setSuccess(map);
+						setSuccess(list);
 
 						ctx.close();
 					}
@@ -111,10 +124,10 @@ public class AwsDescribeTags extends HttpFuture<Map<String, String>> {
 		}
 	}
 
-	public AwsDescribeTags(HttpCloud cloud, String host, String resourceId, Configuration configuration) {
+	public AwsDescribeInstances(HttpCloud cloud, String host, String filters, Configuration configuration) {
 		super(cloud, host, configuration, true);
 
 
-		connect(new TagsHandler(resourceId));
+		connect(new TagsHandler(filters));
 	}
 }

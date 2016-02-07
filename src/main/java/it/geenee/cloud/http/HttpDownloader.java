@@ -104,7 +104,6 @@ public class HttpDownloader extends HttpTransfer {
 
 			// part is now initializing
 			this.part.setState(Part.State.INITIATING);
-			stateChange();
 
 			super.handlerAdded(ctx);
 		}
@@ -145,9 +144,6 @@ public class HttpDownloader extends HttpTransfer {
 					// success: set state of part to PROGRESS
 					this.part.setState(Transfer.Part.State.PROGRESS);
 					this.position = 0;
-
-					// notify state change to wainting threads
-					stateChange();
 				}
 			} else if (msg instanceof HttpContent) {
 				HttpContent content = (HttpContent) msg;
@@ -157,17 +153,9 @@ public class HttpDownloader extends HttpTransfer {
 					ByteBuf buf = content.content();
 					this.position += file.write(buf.nioBuffer(), this.part.offset + this.position);
 
-					//System.err.print(content.content().toString(CharsetUtil.UTF_8));
-					//System.err.flush();
-
 					if (content instanceof LastHttpContent) {
-						//System.err.println("} END OF CONTENT");
-
 						// set state of part to SUCCESS
 						this.part.setState(Transfer.Part.State.DONE);
-
-						// notify state change to wainting threads
-						stateChange();
 
 						// part done, start next part or complete download if no more parts
 						partDone(this.part);
@@ -176,7 +164,7 @@ public class HttpDownloader extends HttpTransfer {
 					}
 				} else {
 					// http error (e.g. 400)
-					//System.err.print(content.content().toString(HttpCloud.UTF_8));
+					//System.err.println(content.content().toString(HttpCloud.UTF_8));
 					if (content instanceof LastHttpContent) {
 						ctx.close();
 
@@ -255,6 +243,5 @@ public class HttpDownloader extends HttpTransfer {
 	@Override
 	protected void completeTransfer() {
 		setState(State.SUCCESS);
-		stateChange();
 	}
 }
