@@ -56,7 +56,7 @@ public class AwsComputeTest {
 		System.out.println(instances.toString());
 	}
 
-	//@Test
+	@Test
 	public void testTags() throws Exception {
 		Configuration configuration = Cloud.configure()
 				.region(region)

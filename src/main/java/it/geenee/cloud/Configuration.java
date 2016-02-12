@@ -32,4 +32,20 @@ public class Configuration {
 				configuration.retryCount > 0 ? configuration.retryCount : this.retryCount
 		);
 	}
+
+
+	// helpers
+
+	static StringBuilder append(StringBuilder b, String key, String value) {
+		if (b.length() > 1)
+			b.append(", ");
+		b.append(key);
+		b.append(": ");
+		if (value != null)
+			b.append('"');
+		b.append(value);
+		if (value != null)
+			b.append('"');
+		return b;
+	}
 }

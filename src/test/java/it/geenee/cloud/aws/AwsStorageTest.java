@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.List;
 import java.util.Random;
 
 import it.geenee.cloud.*;
@@ -14,9 +15,11 @@ import org.junit.Assert;
 
 
 public class AwsStorageTest {
-	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-upload-testing");
+	//Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-upload-testing");
+	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-upload-production");
 	String region = "eu-central-1";
-	String bucket = "efreet-recognition-testing";
+	//String bucket = "efreet-recognition-testing";
+	String bucket = "efreet-recognition-production";
 
 	File smallFilePath = new File("smallTestFile");
 	int smallFileSize = 100000;
@@ -98,7 +101,7 @@ public class AwsStorageTest {
 		Storage storage = cloud.getStorage();
 
 		try (RandomAccessFile file = new RandomAccessFile(path, "rw")) {
-			Transfer downloader = storage.download(file.getChannel(), "/" + bucket + "/" + path.getName(), null);
+			Transfer downloader = storage.download(file.getChannel(), bucket + "/" + path.getName(), null);
 
 			wait(downloader);
 
@@ -117,7 +120,7 @@ public class AwsStorageTest {
 		Storage storage = cloud.getStorage(configuration);
 
 		try (RandomAccessFile file = new RandomAccessFile(path, "r")) {
-			Transfer uploader = storage.upload(file.getChannel(), "/" + bucket + "/" + path.getName());
+			Transfer uploader = storage.upload(file.getChannel(), bucket + "/" + path.getName());
 
 			wait(uploader);
 
@@ -136,5 +139,27 @@ public class AwsStorageTest {
 
 		testDownload(smallFilePath);
 		testDownload(largeFilePath);
+	}
+
+	@Test
+	public void testIncompleteUploads() throws Exception {
+		Cloud cloud = new AwsCloud(Cloud.configure()
+				.region(region)
+				.credentials(credentials)
+				.build());
+
+		Storage storage = cloud.getStorage();
+		List<Upload> list = storage.getIncompleteUploads(bucket);
+	}
+
+	@Test
+	public void testList() throws Exception {
+		Cloud cloud = new AwsCloud(Cloud.configure()
+				.region(region)
+				.credentials(credentials)
+				.build());
+
+		Storage storage = cloud.getStorage();
+		List<Instance> list = storage.requestList(bucket).get();
 	}
 }

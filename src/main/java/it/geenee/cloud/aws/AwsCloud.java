@@ -27,7 +27,10 @@ import it.geenee.cloud.http.HttpDownloader;
 public class AwsCloud extends HttpCloud {
 
 	public static final String DEFAULT_REGION = "us-east-1";
-	public static final String EC2_VERSION = "&Version=2015-10-01";
+	public static final Configuration DEFAULT_CONFIGURATION = new Configuration(DEFAULT_REGION, null, 8 * 1024 * 1024, 5, 60, 3);
+	public static final String EC2_VERSION = "2015-10-01";
+
+	protected static final String EC2_QUERY = "&Version=" + EC2_VERSION;
 
 
 	/**
@@ -44,7 +47,7 @@ public class AwsCloud extends HttpCloud {
 	 * @throws SSLException
 	 */
 	public AwsCloud(Configuration configuration) throws SSLException {
-		super(new Configuration(DEFAULT_REGION, null, 8 * 1024 * 1024, 5, 60, 3).merge(configuration));
+		super(DEFAULT_CONFIGURATION.merge(configuration));
 	}
 
 	// general
@@ -224,18 +227,24 @@ public class AwsCloud extends HttpCloud {
 
 			@Override
 			public Transfer download(FileChannel file, String remotePath, String version) throws IOException {
-				assert remotePath.startsWith("/") : "remote path must be absolute (start with '/')";
-
-				return new HttpDownloader(AwsCloud.this, file, host, remotePath, version, conf);
+				return new HttpDownloader(AwsCloud.this, file, host, '/' + remotePath, version, conf);
 			}
 
 			@Override
 			public Transfer upload(FileChannel file, String remotePath) throws IOException {
-				assert remotePath.startsWith("/") : "remote path must be absolute (start with '/')";
-
 				if (file.size() <= conf.partSize)
-					return new AwsUploader(AwsCloud.this, file, host, remotePath, conf);
-				return new AwsMultipartUploader(AwsCloud.this, file, host, remotePath, conf);
+					return new AwsUploader(AwsCloud.this, file, host, '/' + remotePath, conf);
+				return new AwsMultipartUploader(AwsCloud.this, file, host, '/' + remotePath, conf);
+			}
+
+			@Override
+			public Future<List<Instance>> requestList(String remotePath) {
+				return new AwsListBucket(AwsCloud.this, host, remotePath, conf);
+			}
+
+			@Override
+			public Future<List<Upload>> requestIncompleteUploads(String remotePath) {
+				return new AwsListMultipartUploads(AwsCloud.this, host, remotePath, conf);
 			}
 		};
 	}

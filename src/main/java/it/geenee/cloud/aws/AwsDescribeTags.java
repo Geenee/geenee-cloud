@@ -4,12 +4,8 @@ import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
 
-import io.netty.channel.*;
-import io.netty.handler.codec.http.*;
-
 import it.geenee.cloud.*;
 import it.geenee.cloud.http.HttpCloud;
-import it.geenee.cloud.http.HttpException;
 import it.geenee.cloud.http.HttpFuture;
 
 import javax.xml.bind.JAXBContext;
@@ -21,99 +17,33 @@ import javax.xml.bind.Unmarshaller;
  */
 public class AwsDescribeTags extends HttpFuture<Map<String, String>> {
 
-	// channel handler to upload file via PUT
-	class TagsHandler extends HttpFuture.Handler {
-		String resourceId;
-
-		int retryCount = 0;
-
-		// http content received in response from server
-		byte[] content;
-
-
+	class TagsHandler extends HttpFuture.GetHandler {
 		TagsHandler(String resourceId) {
-			this.resourceId = resourceId;
+			super("/?Action=DescribeTags&Filter.1.Name=resource-id&Filter.1.Value.1=" + resourceId + AwsCloud.EC2_QUERY);
 		}
 
 		@Override
-		public void channelActive(ChannelHandlerContext ctx) throws Exception {
-			// connection is established: send http request to server
+		protected void success(byte[] content) throws Exception {
+			// parse xml
+			//System.out.println(new String(this.content, HttpCloud.UTF_8));
+			JAXBContext jc = JAXBContext.newInstance(DescribeTagsResponse.class);
+			Unmarshaller unmarshaller = jc.createUnmarshaller();
+			DescribeTagsResponse response = (DescribeTagsResponse) unmarshaller.unmarshal(new ByteArrayInputStream(content));
 
-			// build uri for describe tags (http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeTags.html)
-			String uri = "/?Action=DescribeTags&Filter.1.Name=resource-id&Filter.1.Value.1=" + this.resourceId + AwsCloud.EC2_VERSION;
-
-			// build http request
-			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri);
-			HttpHeaders headers = request.headers();
-			headers.set(HttpHeaders.Names.HOST, host);
-			cloud.extendRequest(request, configuration);
-
-			// send the http request
-			ctx.writeAndFlush(request);
-
-			super.channelActive(ctx);
-		}
-
-		@Override
-		protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
-			if (msg instanceof HttpResponse) {
-				HttpResponse response = (HttpResponse) msg;
-
-				// get http response code
-				this.responseCode = response.getStatus().code();
-			} else if (msg instanceof HttpContent) {
-				HttpContent content = (HttpContent) msg;
-
-				if (this.responseCode / 100 == 2) {
-					// http request succeeded: collect content
-					this.content = HttpCloud.collectContent(this.content, content);
-
-					if (content instanceof LastHttpContent) {
-						// parse xml
-						//System.out.println(new String(this.content, HttpCloud.UTF_8));
-						JAXBContext jc = JAXBContext.newInstance(DescribeTagsResponse.class);
-						Unmarshaller unmarshaller = jc.createUnmarshaller();
-						DescribeTagsResponse response = (DescribeTagsResponse) unmarshaller.unmarshal(new ByteArrayInputStream(this.content));
-
-						// describe tags done
-						Map<String, String> map = new HashMap<>();
-						if (response.tagSet != null && response.tagSet.items != null) {
-							for (DescribeTagsResponse.Item item : response.tagSet.items) {
-								map.put(item.key, item.value);
-							}
-						}
-						setSuccess(map);
-
-						ctx.close();
-					}
-				} else {
-					// http error (e.g. 400)
-					System.err.println(content.content().toString(HttpCloud.UTF_8));
-					if (content instanceof LastHttpContent) {
-						ctx.close();
-
-						// transfer has failed, maybe retry is possible
-						setFailed(isRetryCode(), new HttpException(this.responseCode));
-					}
+			// describe tags done
+			Map<String, String> map = new HashMap<>();
+			if (response.tagSet != null && response.tagSet.items != null) {
+				for (DescribeTagsResponse.Item item : response.tagSet.items) {
+					map.put(item.key, item.value);
 				}
 			}
-		}
-
-		@Override
-		protected boolean hasFailed() {
-			// if state is not success (e.g. on read timeout), describe tags has failed
-			return !isSuccess();
-		}
-
-		@Override
-		public boolean retry(int maxRetryCount) {
-			return ++this.retryCount >= maxRetryCount;
+			setSuccess(map);
 		}
 	}
 
+
 	public AwsDescribeTags(HttpCloud cloud, String host, String resourceId, Configuration configuration) {
 		super(cloud, host, configuration, true);
-
 
 		connect(new TagsHandler(resourceId));
 	}

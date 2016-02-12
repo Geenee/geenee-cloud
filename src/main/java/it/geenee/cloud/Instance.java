@@ -34,27 +34,14 @@ public class Instance {
 
 	public String toString() {
 		StringBuilder b = new StringBuilder();
-
 		b.append('{');
-		append(b, "instanceId", this.instanceId);
-		append(b, "groupId", this.groupId);
-		append(b, "zone", this.zone);
-		append(b, "region", this.region);
-		append(b, "privateIpAddress", this.privateIpAddress);
-		append(b, "ipAddress", this.ipAddress);
+		Configuration.append(b, "instanceId", this.instanceId);
+		Configuration.append(b, "groupId", this.groupId);
+		Configuration.append(b, "zone", this.zone);
+		Configuration.append(b, "region", this.region);
+		Configuration.append(b, "privateIpAddress", this.privateIpAddress);
+		Configuration.append(b, "ipAddress", this.ipAddress);
 		b.append('}');
 		return b.toString();
-	}
-	static StringBuilder append(StringBuilder b, String key, String value) {
-		if (b.length() > 1)
-			b.append(", ");
-		b.append(key);
-		b.append(": ");
-		if (value != null)
-			b.append('"');
-		b.append(value);
-		if (value != null)
-			b.append('"');
-		return b;
 	}
 }

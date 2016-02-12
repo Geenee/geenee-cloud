@@ -2,6 +2,7 @@ package it.geenee.cloud.http;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -54,7 +55,9 @@ public abstract class HttpFuture<V> implements Future<V> {
 	List<GenericFutureListener<HttpFuture<V>>> listeners = new ArrayList<>();
 
 
-
+	/**
+	 * Base class for all http handlers that has retry logic already built in
+	 */
 	protected abstract class Handler extends SimpleChannelInboundHandler<HttpObject> {
 		// http response code
 		protected int responseCode = 0;
@@ -67,6 +70,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 		@Override
 		protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
+			// dummy is necessary to prevent compilation error
 		}
 
 		@Override
@@ -131,6 +135,89 @@ public abstract class HttpFuture<V> implements Future<V> {
 		}
 	}
 
+	protected abstract class GetHandler extends Handler {
+
+		String path;
+
+		int retryCount = 0;
+
+		// http content received in response from server
+		byte[] content;
+
+
+		public GetHandler(String path) {
+			assert path != null : "path must not be null";
+			assert path.startsWith("/") : "path must start with '/'";
+			this.path = path;
+		}
+
+		@Override
+		public void channelActive(ChannelHandlerContext ctx) throws Exception {
+			// connection is established: send http request to server
+
+			// build http request
+			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, this.path);
+			HttpHeaders headers = request.headers();
+			headers.set(HttpHeaders.Names.HOST, host);
+			cloud.extendRequest(request, configuration);
+
+			// send the http request
+			ctx.writeAndFlush(request);
+
+			super.channelActive(ctx);
+		}
+
+		@Override
+		protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
+			if (msg instanceof HttpResponse) {
+				HttpResponse response = (HttpResponse) msg;
+
+				// get http response code
+				this.responseCode = response.getStatus().code();
+			} else if (msg instanceof HttpContent) {
+				HttpContent content = (HttpContent) msg;
+
+				if (this.responseCode / 100 == 2) {
+					// http request succeeded: collect content
+					this.content = HttpCloud.collectContent(this.content, content);
+
+					if (content instanceof LastHttpContent) {
+						success(this.content);
+
+						// mark success
+						this.path = null;
+
+						ctx.close();
+					}
+				} else {
+					// http error (e.g. 400)
+					//System.err.println(content.content().toString(HttpCloud.UTF_8));
+					if (content instanceof LastHttpContent) {
+						ctx.close();
+
+						// transfer has failed, maybe retry is possible
+						setFailed(isRetryCode(), new HttpException(this.responseCode));
+					}
+				}
+			}
+		}
+
+		@Override
+		protected boolean hasFailed() {
+			// uri is set to null after calling success()
+			return this.path != null;
+		}
+
+		@Override
+		public boolean retry(int maxRetryCount) {
+			return ++this.retryCount >= maxRetryCount;
+		}
+
+		/**
+		 * Gets called when the http get request was successful
+		 */
+		abstract protected void success(byte[] content) throws Exception;
+	}
 
 
 	public HttpFuture(HttpCloud cloud, String host, Configuration configuration, boolean https) {
