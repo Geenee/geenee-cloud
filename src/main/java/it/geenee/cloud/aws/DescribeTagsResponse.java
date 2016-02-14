@@ -13,6 +13,9 @@ public class DescribeTagsResponse {
 	@XmlElement(name = "requestId")
 	public String requestId;
 
+	@XmlElement(name = "nextToken")
+	public String nextToken;
+
 	public static class Item {
 		@XmlElement(name = "resourceId")
 		public String resourceId;

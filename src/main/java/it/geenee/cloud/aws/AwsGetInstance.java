@@ -9,7 +9,7 @@ import it.geenee.cloud.*;
  * AWS get instance data of the instance we are currently running on
  * http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
  */
-public class AwsGetInstance extends HttpFuture<Instance> {
+public class AwsGetInstance extends HttpFuture<InstanceInfo> {
 	public static final String HOST = "instance-data";
 	public static final String INSTANCE_ID = "/latest/meta-data/instance-id";
 	public static final String ZONE = "/latest/meta-data/placement/availability-zone";
@@ -91,7 +91,7 @@ public class AwsGetInstance extends HttpFuture<Instance> {
 	}
 
 	public AwsGetInstance(HttpCloud cloud, Configuration configuration) {
-		super(cloud, HOST, configuration, false); // use http
+		super(cloud, configuration, HOST, false); // use http
 
 		connect(new GetHandler(INSTANCE_ID));
 		connect(new GetHandler(ZONE));
@@ -108,7 +108,7 @@ public class AwsGetInstance extends HttpFuture<Instance> {
 		}
 
 		if (this.instanceId != null && this.zone != null) {
-			setSuccess(new Instance(
+			setSuccess(new InstanceInfo(
 					this.instanceId,
 					null,
 					this.zone,

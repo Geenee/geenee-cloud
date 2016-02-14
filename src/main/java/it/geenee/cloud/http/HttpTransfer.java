@@ -108,8 +108,8 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 	}
 
 
-	public HttpTransfer(HttpCloud cloud, FileChannel file, String host, String remotePath, Configuration configuration) {
-		super(cloud, host, configuration, true);
+	public HttpTransfer(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath) {
+		super(cloud, configuration, host, true);
 
 		this.file = file;
 		this.remotePath = remotePath;

@@ -188,8 +188,8 @@ public class HttpDownloader extends HttpTransfer {
 		}
 	}
 
-	public HttpDownloader(HttpCloud cloud, FileChannel file, String host, String remotePath, String version, Configuration configuration) {
-		super(cloud, file, host, remotePath, configuration);
+	public HttpDownloader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath, String version) {
+		super(cloud, configuration, file, host, remotePath);
 
 		// how to do it with bootstrap
 		/*

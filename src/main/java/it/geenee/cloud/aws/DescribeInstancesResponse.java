@@ -13,6 +13,9 @@ public class DescribeInstancesResponse {
 	@XmlElement(name = "requestId")
 	public String requestId;
 
+	@XmlElement(name = "nextToken")
+	public String nextToken;
+
 	public static class Placement {
 		@XmlElement(name = "availabilityZone")
 		public String availabilityZone;

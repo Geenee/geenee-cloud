@@ -12,9 +12,9 @@ public interface Compute {
 	 * Get the tags associated with the given resource (instance id, ami id etc.)
 	 * @return future for tag key/value pairs
 	 */
-	Future<Map<String, String>> requestTags(String resourceId);
+	Future<Map<String, String>> startGetTags(String resourceId);
 	default Map<String, String> getTags(String resourceId) throws InterruptedException, ExecutionException {
-		return requestTags(resourceId).get();
+		return startGetTags(resourceId).get();
 	}
 
 
@@ -34,8 +34,8 @@ public interface Compute {
 		Instances filterTagKey(String... keys);
 		Instances filterTagValue(String... values);
 
-		Future<List<Instance>> request();
-		default List<Instance> get() throws InterruptedException, ExecutionException {
+		Future<List<InstanceInfo>> request();
+		default List<InstanceInfo> get() throws InterruptedException, ExecutionException {
 			return request().get();
 		}
 	}

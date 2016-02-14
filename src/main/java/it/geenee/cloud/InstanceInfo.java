@@ -1,9 +1,9 @@
 package it.geenee.cloud;
 
 /**
- * Instance description
+ * Information about an instance
  */
-public class Instance {
+public class InstanceInfo {
 	// id of the instance
 	public final String instanceId;
 
@@ -16,12 +16,12 @@ public class Instance {
 	// region (AWS: e.g. "us-east-1")
 	public final String region;
 
-
+	// public and private ip address
 	public final String privateIpAddress;
 	public final String ipAddress;
 
 
-	public Instance(String instanceId, String groupId, String zone, String region,
+	public InstanceInfo(String instanceId, String groupId, String zone, String region,
 			String privateIpAddress, String ipAddress) {
 		this.instanceId = instanceId;
 		this.groupId = groupId;

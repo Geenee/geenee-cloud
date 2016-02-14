@@ -188,6 +188,16 @@ public abstract class HttpCloud implements Cloud {
 		return s;
 	}
 
+	public static String addQuery(String pathAndQuery, String key, String value) {
+		return pathAndQuery + (pathAndQuery.indexOf('?') == -1 ? '?' : '&') + key + '=' + encode(value);
+	}
+	public static String addQuery(String pathAndQuery, String key, int value) {
+		return pathAndQuery + (pathAndQuery.indexOf('?') == -1 ? '?' : '&') + key + '=' + value;
+	}
+	public static String addQuery(String pathAndQuery, String key) {
+		return pathAndQuery + (pathAndQuery.indexOf('?') == -1 ? '?' : '&') + key;
+	}
+
 	public static byte[] collectContent(byte[] data, HttpContent content) {
 		ByteBuf buf = content.content();
 		int readableBytes = buf.readableBytes();

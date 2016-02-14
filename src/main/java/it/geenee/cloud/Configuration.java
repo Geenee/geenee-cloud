@@ -36,11 +36,14 @@ public class Configuration {
 
 	// helpers
 
-	static StringBuilder append(StringBuilder b, String key, String value) {
+	static void appendKey(StringBuilder b, String key) {
 		if (b.length() > 1)
 			b.append(", ");
 		b.append(key);
 		b.append(": ");
+	}
+	static StringBuilder append(StringBuilder b, String key, String value) {
+		appendKey(b, key);
 		if (value != null)
 			b.append('"');
 		b.append(value);
@@ -48,4 +51,10 @@ public class Configuration {
 			b.append('"');
 		return b;
 	}
+	static StringBuilder append(StringBuilder b, String key, boolean value) {
+		appendKey(b, key);
+		b.append(value);
+		return b;
+	}
+
 }

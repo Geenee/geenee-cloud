@@ -13,7 +13,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.net.URLEncoder;
 import java.nio.channels.FileChannel;
 import java.security.MessageDigest;
 import java.text.DateFormat;
@@ -109,144 +108,28 @@ public class AwsCloud extends HttpCloud {
 	// this instance
 
 	@Override
-	public Future<Instance> requestInstance() {
+	public Future<InstanceInfo> requestInstance() {
 		return new AwsGetInstance(this, configuration);
 	}
 
 	// compute
 
 	@Override
-	public Compute getCompute(Configuration configuration) {
+	public AwsCompute getCompute(Configuration configuration) {
 		// merge global configuration with given configuration
-		final Configuration conf = this.configuration.merge(configuration);
-		final String host = getHost("ec2", conf.region);
-
-		return new Compute() {
-			@Override
-			public Future<Map<String, String>> requestTags(String resourceId) {
-				return new AwsDescribeTags(AwsCloud.this, host, resourceId, conf);
-			}
-			@Override
-			public Instances instances() {
-				return new Instances() {
-					int index = 1;
-					StringBuilder filters = new StringBuilder();
-
-					@Override
-					public Instances filter(String key, String... values) {
-						this.filters.append("&Filter.").append(this.index).append(".Name=").append(encode(key));
-						int i = 1;
-						for (String value : values) {
-							this.filters.append("&Filter.").append(this.index).append(".Value.").append(i).append('=').append(encode(value));
-							++i;
-						}
-						++this.index;
-						return this;
-					}
-
-					@Override
-					public Instances filterZone(String... zones) {
-						return filter("availability-zone", zones);
-					}
-
-					@Override
-					public Instances filterTag(String key, String... values) {
-						return filter("tag:" + key, values);
-					}
-
-					@Override
-					public Instances filterTagKey(String... keys) {
-						return filter("tag-key", keys);
-					}
-
-					@Override
-					public Instances filterTagValue(String... values) {
-						return filter("tag-value", values);
-					}
-
-					@Override
-					public Future<List<Instance>> request() {
-						return new AwsDescribeInstances(AwsCloud.this, host, filters.toString(), conf);
-					}
-				};
-			}
-
-		};
+		configuration = this.configuration.merge(configuration);
+		String host = getHost("ec2", configuration.region);
+		return new AwsCompute(this, configuration, host);
 	}
-
-	//class Instances
 
 	// storage
 
 	@Override
-	public Storage getStorage(Configuration configuration) {
+	public AwsStorage getStorage(Configuration configuration) {
 		// merge global configuration with given configuration
-		final Configuration conf = this.configuration.merge(configuration);
-		final String host = getHost("s3", conf.region);
-
-		return new Storage() {
-			/**
-			 * Calculates the Amazon S3 ETag of a file. The algorithm uses the multipart upload chunk size. If the file can be
-			 * uploaded as one part, the ETag is the MD5 hash. If the file has to be uploaded in multiple parts, the algorithm
-			 * is as follows: Calculate the MD5 hash for each part of the file, concatenate the hashes into a single binary
-			 * string and calculate the MD5 hash of that result. Then append '-' and the number of parts.
-			 * https://stackoverflow.com/questions/12186993/what-is-the-algorithm-to-compute-the-amazon-s3-etag-for-a-file-larger-than-5gb
-			 * @param file file to calculate the ETag for
-			 * @return the ETag
-			 * @throws Exception
-			 */
-			@Override
-			public String calculateHash(FileChannel file) throws Exception {
-				long fileLength = file.size();
-				long partSize = conf.partSize;
-				long partCount = (fileLength + partSize - 1) / partSize;
-				if (partCount <= 1) {
-					// single part: calc hex encoded md5 of file
-					return Hex.encodeHexString(md5(file, 0, fileLength));
-				} else {
-					// multipart: calc md5 for each part
-					List<byte[]> partMds = new ArrayList<>();
-					for (long partIndex = 0; partIndex < partCount; ++partIndex) {
-						long offset = partIndex * partSize;
-						long length = Math.min(partSize, fileLength - offset);
-
-						// calc md5 of part
-						partMds.add(md5(file, offset, length));
-					}
-
-					// calc md5 of md5's of parts
-					MessageDigest md = MessageDigest.getInstance("MD5");
-					for (byte[] partMd : partMds) {
-						md.update(partMd);
-					}
-
-					// return hex encoded md5 with part count
-					return Hex.encodeHexString(md.digest()) + '-' + Long.toString(partCount);
-				}
-			}
-
-			@Override
-			public Transfer download(FileChannel file, String remotePath, String version) throws IOException {
-				return new HttpDownloader(AwsCloud.this, file, host, '/' + remotePath, version, conf);
-			}
-
-			@Override
-			public Transfer upload(FileChannel file, String remotePath) throws IOException {
-				if (file.size() <= conf.partSize)
-					return new AwsUploader(AwsCloud.this, file, host, '/' + remotePath, conf);
-				return new AwsMultipartUploader(AwsCloud.this, file, host, '/' + remotePath, conf);
-			}
-
-			@Override
-			public Future<List<Instance>> requestList(String remotePath) {
-				return new AwsListBucket(AwsCloud.this, host, remotePath, conf);
-			}
-
-			@Override
-			public Future<List<Upload>> requestIncompleteUploads(String remotePath) {
-				return new AwsListMultipartUploads(AwsCloud.this, host, remotePath, conf);
-			}
-		};
+		configuration = this.configuration.merge(configuration);
+		String host = getHost("s3", configuration.region);
+		return new AwsStorage(this, configuration, host);
 	}
 
 	// helpers
@@ -291,8 +174,8 @@ public class AwsCloud extends HttpCloud {
 		// get host
 		String host = headers.get(HttpHeaders.Names.HOST);
 
-		// get request uri (e.g. "/myBucket/foo.txt?versionId=123")
-		String uri = request.getUri();
+		// get request path and query (e.g. "/myBucket/foo.txt?versionId=123")
+		String pathAndQuery = request.getUri();
 
 		// get service (e.g. "s3") from host
 		String service = host.substring(0, host.indexOf('.'));
@@ -323,7 +206,7 @@ public class AwsCloud extends HttpCloud {
 
 		if (useQuery) {
 			// signature in query parameters
-			uri = uri + (uri.indexOf('?') == -1 ? '?' : '&') + "X-Amz-Algorithm=AWS4-HMAC-SHA256"
+			pathAndQuery += (pathAndQuery.indexOf('?') == -1 ? '?' : '&') + "X-Amz-Algorithm=AWS4-HMAC-SHA256"
 					+ "&X-Amz-Credential=" + encode(credential)
 					+ "&X-Amz-Date=" + time
 					+ "&X-Amz-Expires=600"
@@ -333,14 +216,14 @@ public class AwsCloud extends HttpCloud {
 		// split uri into path and canonical queries
 		String path;
 		String[] canonicalQueries;
-		int queryPos = uri.indexOf('?');
+		int queryPos = pathAndQuery.indexOf('?');
 		if (queryPos == -1) {
 			// no query parameters
-			path = uri;
+			path = pathAndQuery;
 			canonicalQueries = new String[0];
 		} else {
-			path = uri.substring(0, queryPos);
-			canonicalQueries = uri.substring(queryPos + 1).split("&");
+			path = pathAndQuery.substring(0, queryPos);
+			canonicalQueries = pathAndQuery.substring(queryPos + 1).split("&");
 			Arrays.sort(canonicalQueries);
 		}
 		assert !path.isEmpty() : "path is empty, must be at least '/'";
@@ -381,7 +264,7 @@ public class AwsCloud extends HttpCloud {
 		// sign
 		if (useQuery) {
 			// query string
-			String signed = uri + "&X-Amz-Signature=" + signature;
+			String signed = pathAndQuery + "&X-Amz-Signature=" + signature;
 			request.setUri(signed);
 		} else {
 			// authorization header

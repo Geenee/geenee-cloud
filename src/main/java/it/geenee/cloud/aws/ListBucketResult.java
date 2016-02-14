@@ -24,11 +24,6 @@ public class ListBucketResult {
 	@XmlElement(name = "IsTruncated")
 	public boolean isTruncated;
 
-	public static class Owner {
-		@XmlElement(name = "ID")
-		public String id;
-	}
-
 	public static class Entry {
 		@XmlElement(name = "Key")
 		public String key;
@@ -43,7 +38,7 @@ public class ListBucketResult {
 		public long size;
 
 		@XmlElement(name = "Owner")
-		public Owner owner;
+		public User owner;
 
 		@XmlElement(name = "StorageClass")
 		public String storageClass;

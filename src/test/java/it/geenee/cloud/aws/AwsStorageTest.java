@@ -5,6 +5,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import it.geenee.cloud.*;
@@ -101,7 +102,7 @@ public class AwsStorageTest {
 		Storage storage = cloud.getStorage();
 
 		try (RandomAccessFile file = new RandomAccessFile(path, "rw")) {
-			Transfer downloader = storage.download(file.getChannel(), bucket + "/" + path.getName(), null);
+			Transfer downloader = storage.startDownload(file.getChannel(), bucket + "/" + path.getName(), null);
 
 			wait(downloader);
 
@@ -120,7 +121,7 @@ public class AwsStorageTest {
 		Storage storage = cloud.getStorage(configuration);
 
 		try (RandomAccessFile file = new RandomAccessFile(path, "r")) {
-			Transfer uploader = storage.upload(file.getChannel(), bucket + "/" + path.getName());
+			Transfer uploader = storage.startUpload(file.getChannel(), bucket + "/" + path.getName());
 
 			wait(uploader);
 
@@ -142,24 +143,29 @@ public class AwsStorageTest {
 	}
 
 	@Test
-	public void testIncompleteUploads() throws Exception {
+	public void testGetUploads() throws Exception {
 		Cloud cloud = new AwsCloud(Cloud.configure()
 				.region(region)
 				.credentials(credentials)
 				.build());
 
 		Storage storage = cloud.getStorage();
-		List<Upload> list = storage.getIncompleteUploads(bucket);
+		List<UploadInfo> uploadInfos = storage.getUploads(bucket);
+
+		System.out.println(uploadInfos.toString());
 	}
 
 	@Test
-	public void testList() throws Exception {
+	public void testGetList() throws Exception {
 		Cloud cloud = new AwsCloud(Cloud.configure()
 				.region(region)
 				.credentials(credentials)
 				.build());
 
 		Storage storage = cloud.getStorage();
-		List<Instance> list = storage.requestList(bucket).get();
+		Map<String, String> fileMap = storage.getFiles(bucket);
+		List<FileInfo> fileInfos = storage.getFiles(bucket, Storage.ListMode.VERSIONED_DELETED_ALL);
+
+		System.out.println(fileInfos.toString());
 	}
 }

@@ -118,8 +118,8 @@ public class AwsUploader extends HttpTransfer {
 		}
 	}
 
-	public AwsUploader(HttpCloud cloud, FileChannel file, String host, String remotePath, Configuration configuration) throws IOException {
-		super(cloud, file, host, remotePath, configuration);
+	public AwsUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath) throws IOException {
+		super(cloud, configuration, file, host, remotePath);
 
 		startTransfer(file.size(), null);
 	}

@@ -2,9 +2,6 @@ package it.geenee.cloud;
 
 import io.netty.util.concurrent.Future;
 
-import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 public interface Cloud {
@@ -89,8 +86,8 @@ public interface Cloud {
 	/**
 	 * Get instance data of the instance we are currently running on
 	 */
-	Future<Instance> requestInstance();
-	default Instance getInstance() throws InterruptedException, ExecutionException {
+	Future<InstanceInfo> requestInstance();
+	default InstanceInfo getInstance() throws InterruptedException, ExecutionException {
 		return requestInstance().get();
 	}
 

@@ -1,19 +1,23 @@
 package it.geenee.cloud;
 
 /**
- * Instance description
+ * Information about an upload
  */
-public class Upload {
+public class UploadInfo {
 	// path of the file
 	public final String path;
 
 	// id of the upload
 	public final String uploadId;
 
+	// timestamp in iso format and utc time zone
+	public final String timestamp;
 
-	public Upload(String path, String uploadId) {
+
+	public UploadInfo(String path, String uploadId, String timestamp) {
 		this.path = path;
 		this.uploadId = uploadId;
+		this.timestamp = timestamp;
 	}
 
 	public String toString() {
@@ -21,6 +25,7 @@ public class Upload {
 		b.append('{');
 		Configuration.append(b, "path", this.path);
 		Configuration.append(b, "uploadId", this.uploadId);
+		Configuration.append(b, "timestamp", this.timestamp);
 		b.append('}');
 		return b.toString();
 	}

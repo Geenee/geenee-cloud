@@ -27,14 +27,14 @@ public abstract class HttpFuture<V> implements Future<V> {
 	public static final int HTTP_PORT = 80;
 	public static final int HTTPS_PORT = 443;
 
-	// needed to sign the requests using a provider specific algorithm
-	protected final HttpCloud cloud;
+	// cloud and configuration
+	protected final HttpCloud cloud; // has cloud provider specific extendRequest() funciton
+	protected final Configuration configuration;
 
 	// host to connect to
 	protected final String host;
 
-	// configuration
-	protected final Configuration configuration;
+	// http or https
 	protected final boolean https;
 
 	// state of query
@@ -137,7 +137,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 	protected abstract class GetHandler extends Handler {
 
-		String path;
+		String pathAndQuery;
 
 		int retryCount = 0;
 
@@ -145,10 +145,14 @@ public abstract class HttpFuture<V> implements Future<V> {
 		byte[] content;
 
 
-		public GetHandler(String path) {
-			assert path != null : "path must not be null";
-			assert path.startsWith("/") : "path must start with '/'";
-			this.path = path;
+		public GetHandler(String pathAndQuery) {
+			assert pathAndQuery != null : "path must not be null";
+			assert pathAndQuery.startsWith("/") : "path must start with '/'";
+			this.pathAndQuery = pathAndQuery;
+		}
+
+		public String getPathAndQuery() {
+			return this.pathAndQuery;
 		}
 
 		@Override
@@ -156,7 +160,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 			// connection is established: send http request to server
 
 			// build http request
-			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, this.path);
+			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, this.pathAndQuery);
 			HttpHeaders headers = request.headers();
 			headers.set(HttpHeaders.Names.HOST, host);
 			cloud.extendRequest(request, configuration);
@@ -185,13 +189,13 @@ public abstract class HttpFuture<V> implements Future<V> {
 						success(this.content);
 
 						// mark success
-						this.path = null;
+						this.pathAndQuery = null;
 
 						ctx.close();
 					}
 				} else {
 					// http error (e.g. 400)
-					//System.err.println(content.content().toString(HttpCloud.UTF_8));
+					System.err.println(content.content().toString(HttpCloud.UTF_8));
 					if (content instanceof LastHttpContent) {
 						ctx.close();
 
@@ -204,8 +208,8 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 		@Override
 		protected boolean hasFailed() {
-			// uri is set to null after calling success()
-			return this.path != null;
+			// path and query are set to null after calling success()
+			return this.pathAndQuery != null;
 		}
 
 		@Override
@@ -220,10 +224,10 @@ public abstract class HttpFuture<V> implements Future<V> {
 	}
 
 
-	public HttpFuture(HttpCloud cloud, String host, Configuration configuration, boolean https) {
+	public HttpFuture(HttpCloud cloud, Configuration configuration, String host, boolean https) {
 		this.cloud = cloud;
-		this.host = host;
 		this.configuration = configuration;
+		this.host = host;
 		this.https = https;
 	}
 

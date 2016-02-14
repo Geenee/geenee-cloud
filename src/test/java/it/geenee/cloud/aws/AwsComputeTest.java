@@ -12,8 +12,8 @@ import org.junit.Assert;
 
 public class AwsComputeTest {
 	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-server-testing");
-	String region = "us-east-1";
-	String instanceId = "i-0e57209551c14c5e5";
+	String region = "eu-central-1";
+	String instanceId = "i-1d8409a1";
 
 	//@Test
 	public void testGetInstance() throws Exception {
@@ -23,13 +23,13 @@ public class AwsComputeTest {
 		Cloud cloud = new AwsCloud(Cloud.configure().timeout(1).build());
 
 		try {
-			Instance instance = cloud.getInstance();
-			System.out.println(instance.instanceId);
-			System.out.println(instance.zone);
-			System.out.println(instance.region);
-			Assert.assertFalse(instance.instanceId.isEmpty());
-			Assert.assertFalse(instance.zone.isEmpty());
-			Assert.assertFalse(instance.region.isEmpty());
+			InstanceInfo instanceInfo = cloud.getInstance();
+			System.out.println(instanceInfo.instanceId);
+			System.out.println(instanceInfo.zone);
+			System.out.println(instanceInfo.region);
+			Assert.assertFalse(instanceInfo.instanceId.isEmpty());
+			Assert.assertFalse(instanceInfo.zone.isEmpty());
+			Assert.assertFalse(instanceInfo.region.isEmpty());
 		} catch (ExecutionException e) {
 			e.getCause().printStackTrace();
 			Assert.fail();
@@ -45,15 +45,15 @@ public class AwsComputeTest {
 		Cloud cloud = new AwsCloud(configuration);
 		Compute compute = cloud.getCompute();
 
-		List<Instance> instances;
+		List<InstanceInfo> instanceInfos;
 
-		instances = compute.instances().filterTagKey("Role").filterTagValue("efreet-master", "foo bar").get();
-		Assert.assertEquals(1, instances.size());
-		System.out.println(instances.toString());
+		instanceInfos = compute.instances().filterTagKey("Role").filterTagValue("master", "foo bar").filterTag("Group", "production").get();
+		Assert.assertEquals(1, instanceInfos.size());
+		System.out.println(instanceInfos.toString());
 
-		instances = compute.instances().filterTag("Role", "efreet-master").get();
-		Assert.assertEquals(1, instances.size());
-		System.out.println(instances.toString());
+		instanceInfos = compute.instances().filterTag("Role", "master").filterTag("Group", "production").get();
+		Assert.assertEquals(1, instanceInfos.size());
+		System.out.println(instanceInfos.toString());
 	}
 
 	@Test
