@@ -37,7 +37,7 @@ public interface Storage {
 	Transfer startUpload(FileChannel file, String remotePath) throws IOException;
 
 	/**
-	 * Request a list of all files that have the given remote path as prefix. The result is returned as a map from file path to file hash which is convenient
+	 * Get a list of all files that have the given remote path as prefix. The result is returned as a map from file path to file hash which is convenient
 	 * for synchronizing a local directory with a remote directory
 	 * @param remotePath
 	 * @return map of file path to file hash
@@ -76,7 +76,7 @@ public interface Storage {
 	}
 
 	/**
-	 * Request a list of all incomplete uploads for files that have the given remote path as prefix
+	 * Get a list of all incomplete uploads for files that have the given remote path as prefix
 	 * @param remotePath
 	 * @return list of incomplete uploads
 	 */
@@ -85,13 +85,19 @@ public interface Storage {
 		return startGetUploads(remotePath).get();
 	}
 
-	Future<Void> startDeleteFile(String remotePath);
-	default void deleteFile(String remotePath) throws InterruptedException, ExecutionException {
-		startDeleteFile(remotePath).get();
+	/**
+	 * Delete a file on the cloud storage
+	 * @param remotePath
+	 * @param version
+	 * @return
+	 */
+	Future<Void> startDeleteFile(String remotePath, String version);
+	default void deleteFile(String remotePath, String version) throws InterruptedException, ExecutionException {
+		startDeleteFile(remotePath, version).get();
 	}
 
-	Future<Void> startDeleteUpload(String remotePath);
-	default void deleteUpload(String remotePath) throws InterruptedException, ExecutionException {
-		startDeleteUpload(remotePath).get();
+	Future<Void> startDeleteUpload(String remotePath, String uploadId);
+	default void deleteUpload(String remotePath, String uploadId) throws InterruptedException, ExecutionException {
+		startDeleteUpload(remotePath, uploadId).get();
 	}
 }

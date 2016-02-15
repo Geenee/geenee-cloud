@@ -1,5 +1,6 @@
 package it.geenee.cloud.aws;
 
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.concurrent.Future;
 import it.geenee.cloud.Compute;
 import it.geenee.cloud.Configuration;
@@ -31,7 +32,7 @@ public class AwsCompute implements Compute {
 		// http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeTags.html
 		final String pathAndQuery = "/?Action=DescribeTags&Filter.1.Name=resource-id&Filter.1.Value.1=" + resourceId + AwsCloud.EC2_QUERY;
 		final Map<String, String> map = new HashMap<>();
-		return new AwsList<Map<String, String>>(this.cloud, this.configuration, this.host, pathAndQuery) {
+		return new AwsRequest<Map<String, String>>(this.cloud, this.configuration, this.host, HttpMethod.GET, pathAndQuery) {
 			@Override
 			protected void success(ByteArrayInputStream content) throws Exception {
 				// parse xml
@@ -48,7 +49,7 @@ public class AwsCompute implements Compute {
 
 				// either repeat or finished
 				if (response.nextToken != null) {
-					connect(new ListHandler(HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken)));
+					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken)));
 				} else {
 					setSuccess(map);
 				}
@@ -64,10 +65,10 @@ public class AwsCompute implements Compute {
 
 			@Override
 			public Instances filter(String key, String... values) {
-				this.filters.append("&Filter.").append(this.index).append(".Name=").append(HttpCloud.encode(key));
+				this.filters.append("&Filter.").append(this.index).append(".Name=").append(HttpCloud.encodeUrl(key));
 				int i = 1;
 				for (String value : values) {
-					this.filters.append("&Filter.").append(this.index).append(".Value.").append(i).append('=').append(HttpCloud.encode(value));
+					this.filters.append("&Filter.").append(this.index).append(".Value.").append(i).append('=').append(HttpCloud.encodeUrl(value));
 					++i;
 				}
 				++this.index;
@@ -99,7 +100,7 @@ public class AwsCompute implements Compute {
 				// http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeInstances.html
 				final String pathAndQuery = "/?Action=DescribeInstances" + this.filters + AwsCloud.EC2_QUERY;
 				final List<InstanceInfo> list = new ArrayList<>();
-				return new AwsList<List<InstanceInfo>>(cloud, configuration, host, pathAndQuery) {
+				return new AwsRequest<List<InstanceInfo>>(cloud, configuration, host, HttpMethod.GET, pathAndQuery) {
 					@Override
 					protected void success(ByteArrayInputStream content) throws Exception {
 						// parse xml
@@ -132,7 +133,7 @@ public class AwsCompute implements Compute {
 
 						// either repeat or finished
 						if (response.nextToken != null) {
-							connect(new ListHandler(HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken)));
+							connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken)));
 						} else {
 							setSuccess(list);
 						}

@@ -178,18 +178,76 @@ public abstract class HttpCloud implements Cloud {
 	 */
 	public abstract String getVersionParameter();
 
-	public static String encode(String s) {
-		try {
-			String e = URLEncoder.encode(s, "UTF-8");
-			return e.replace("+", "%20");
-		} catch (Exception e) {
-			// should not happen
+	static final char[] hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+	/**
+	 * Encode a string for usage as an url accroding to https://en.wikipedia.org/wiki/Percent-encoding
+	 * @param s string to encode (e.g. "some/path/foo bar")
+	 * @return encoded string (e.g. "some%2Fpath%2Ffoo%20bar")
+	 */
+	public static String encodeUrl(String s) {
+		// check if there is anything to encode
+		int len = s.length();
+		int i;
+		for (i = 0; i < len; ++i) {
+			char ch = s.charAt(i);
+			if (!(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '-' || ch == '_' || ch == '.'|| ch == '~'))
+				break;
 		}
-		return s;
+		if (i == len)
+			return s;
+
+		// encode
+		byte[] chars = s.getBytes(UTF_8);
+		StringBuilder b = new StringBuilder();
+		for (byte c : chars) {
+			char ch = (char)(c & 0xff);
+			if (ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '-' || ch == '_' || ch == '.'|| ch == '~') {
+				b.append(ch);
+			} else {
+				b.append('%');
+				b.append(hex[ch / 16]);
+				b.append(hex[ch % 16]);
+			}
+		}
+		return b.toString();
+	}
+
+	/**
+	 * URL-Encode a string for usage as an url accroding to https://en.wikipedia.org/wiki/Percent-encoding
+	 * @param s string to encode (e.g. "some/path/foo bar")
+	 * @return encoded string (e.g. "some%2Fpath%2Ffoo%20bar")
+	 */
+	public static String encodePath(String s) {
+		// check if there is anything to encode
+		int len = s.length();
+		int i;
+		for (i = 0; i < len; ++i) {
+			char ch = s.charAt(i);
+			if (!(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '-' || ch == '_' || ch == '.' || ch == '~' || ch == '/'))
+				break;
+		}
+		if (i == len)
+			return s;
+
+		// encode
+		byte[] chars = s.getBytes(UTF_8);
+		StringBuilder b = new StringBuilder();
+		for (byte c : chars) {
+			char ch = (char)(c & 0xff);
+			if (ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '-' || ch == '_' || ch == '.' || ch == '~' || ch == '/') {
+				b.append(ch);
+			} else {
+				b.append('%');
+				b.append(hex[ch / 16]);
+				b.append(hex[ch % 16]);
+			}
+		}
+		return b.toString();
 	}
 
 	public static String addQuery(String pathAndQuery, String key, String value) {
-		return pathAndQuery + (pathAndQuery.indexOf('?') == -1 ? '?' : '&') + key + '=' + encode(value);
+		return pathAndQuery + (pathAndQuery.indexOf('?') == -1 ? '?' : '&') + key + '=' + encodeUrl(value);
 	}
 	public static String addQuery(String pathAndQuery, String key, int value) {
 		return pathAndQuery + (pathAndQuery.indexOf('?') == -1 ? '?' : '&') + key + '=' + value;

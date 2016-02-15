@@ -10,22 +10,35 @@ import java.util.Random;
 
 import it.geenee.cloud.*;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.Assert;
 
 
 public class AwsStorageTest {
-	//Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-upload-testing");
-	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-upload-production");
-	String region = "eu-central-1";
-	//String bucket = "efreet-recognition-testing";
-	String bucket = "efreet-recognition-production";
+	Storage storage;
 
-	File smallFilePath = new File("smallTestFile");
+	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-upload-testing");
+	String region = "eu-central-1";
+	String bucket = "efreet-recognition-testing";
+
+	File smallFilePath = new File("small test file");
 	int smallFileSize = 100000;
-	File largeFilePath = new File("largeTestFile");
+	File largeFilePath = new File("large test file");
 	int largeFileSize = 20000000;
+
+
+	public AwsStorageTest() throws IOException {
+
+		// create cloud storage object
+		Configuration configuration = Cloud.configure()
+				.region(region)
+				.credentials(credentials)
+				.build();
+		Cloud cloud = new AwsCloud(configuration);
+		this.storage = cloud.getStorage();
+	}
 
 	void generateFile(File path, int size) throws IOException {
 		Random random = new Random(1337);
@@ -36,12 +49,6 @@ public class AwsStorageTest {
 				f.write(data);
 			}
 		}
-	}
-
-	@Before
-	public void generateFiles() throws IOException {
-		generateFile(smallFilePath, smallFileSize);
-		generateFile(largeFilePath, largeFileSize);
 	}
 
 	public void wait(Transfer transfer) throws InterruptedException {
@@ -92,80 +99,78 @@ public class AwsStorageTest {
 		}
 	}
 
-	public void testDownload(File path) throws Exception {
-
-		Configuration configuration = Cloud.configure()
-				.region(region)
-				.credentials(credentials)
-				.build();
-		Cloud cloud = new AwsCloud(configuration);
-		Storage storage = cloud.getStorage();
-
-		try (RandomAccessFile file = new RandomAccessFile(path, "rw")) {
-			Transfer downloader = storage.startDownload(file.getChannel(), bucket + "/" + path.getName(), null);
-
-			wait(downloader);
-
-			// compare hash of local file with the hash (etag) returned by aws
-			Assert.assertEquals(downloader.getHash(), storage.calculateHash(file.getChannel()));
-		}
-	}
-
-	public void testUpload(File path) throws Exception {
-
-		Cloud cloud = new AwsCloud();
-		Configuration configuration = Cloud.configure()
-				.region(region)
-				.credentials(credentials)
-				.build();
-		Storage storage = cloud.getStorage(configuration);
-
+	public void testUpload(File path, String remotePath) throws Exception {
 		try (RandomAccessFile file = new RandomAccessFile(path, "r")) {
-			Transfer uploader = storage.startUpload(file.getChannel(), bucket + "/" + path.getName());
+			Transfer uploader = this.storage.startUpload(file.getChannel(), remotePath);
 
 			wait(uploader);
 
 			// compare hash of local file with the hash (etag) returned by aws
-			Assert.assertEquals(uploader.getHash(), storage.calculateHash(file.getChannel()));
+			Assert.assertEquals(uploader.getHash(), this.storage.calculateHash(file.getChannel()));
 		}
+	}
+
+	public void testDownload(File path, String remotePath) throws Exception {
+		try (RandomAccessFile file = new RandomAccessFile(path, "rw")) {
+			Transfer downloader = this.storage.startDownload(file.getChannel(), remotePath, null);
+
+			wait(downloader);
+
+			// compare hash of local file with the hash (etag) returned by aws
+			Assert.assertEquals(downloader.getHash(), this.storage.calculateHash(file.getChannel()));
+		}
+	}
+
+	public void testTransfer(File path, int size) throws Exception {
+		String remotePath = bucket + '/' + path.getName();
+
+		// generate local file
+		generateFile(path, size);
+
+		// upload file
+		testUpload(path, remotePath);
+
+		// delete local file
+		path.delete();
+
+		// download file
+		testDownload(path, remotePath);
+
+		// delete remote file
+		this.storage.deleteFile(remotePath, null);
+
+		// check if remote file is gone
+		Assert.assertTrue(this.storage.getFiles(remotePath).isEmpty());
 	}
 
 	@Test
 	public void testTransfer() throws Exception {
-		testUpload(smallFilePath);
-		testUpload(largeFilePath);
-
-		smallFilePath.delete();
-		largeFilePath.delete();
-
-		testDownload(smallFilePath);
-		testDownload(largeFilePath);
+		testTransfer(smallFilePath, smallFileSize);
+		testTransfer(largeFilePath, largeFileSize);
 	}
 
 	@Test
-	public void testGetUploads() throws Exception {
-		Cloud cloud = new AwsCloud(Cloud.configure()
-				.region(region)
-				.credentials(credentials)
-				.build());
+	public void testGetAndDeleteUploads() throws Exception {
+		// get list of incomplete uploads
+		List<UploadInfo> uploadInfos = this.storage.getUploads(bucket);
 
-		Storage storage = cloud.getStorage();
-		List<UploadInfo> uploadInfos = storage.getUploads(bucket);
+		for (UploadInfo uploadInfo : uploadInfos) {
+			System.out.println(uploadInfo.toString());
 
-		System.out.println(uploadInfos.toString());
+			// delete incomplete upload
+			this.storage.deleteUpload(uploadInfo.path, uploadInfo.uploadId);
+		}
 	}
 
 	@Test
-	public void testGetList() throws Exception {
-		Cloud cloud = new AwsCloud(Cloud.configure()
-				.region(region)
-				.credentials(credentials)
-				.build());
+	public void testGetFiles() throws Exception {
+		Map<String, String> fileMap = this.storage.getFiles(bucket);
+		System.out.println(fileMap);
 
-		Storage storage = cloud.getStorage();
-		Map<String, String> fileMap = storage.getFiles(bucket);
-		List<FileInfo> fileInfos = storage.getFiles(bucket, Storage.ListMode.VERSIONED_DELETED_ALL);
+		List<FileInfo> fileInfos = this.storage.getFiles(bucket, Storage.ListMode.VERSIONED_DELETED_ALL);
 
-		System.out.println(fileInfos.toString());
+		for (FileInfo fileInfo : fileInfos) {
+			System.out.println(fileInfo.toString());
+		}
 	}
 }

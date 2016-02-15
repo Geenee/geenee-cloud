@@ -14,13 +14,11 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
-import java.security.MessageDigest;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
 import it.geenee.cloud.http.HttpCloud;
-import it.geenee.cloud.http.HttpDownloader;
 
 
 public class AwsCloud extends HttpCloud {
@@ -207,10 +205,10 @@ public class AwsCloud extends HttpCloud {
 		if (useQuery) {
 			// signature in query parameters
 			pathAndQuery += (pathAndQuery.indexOf('?') == -1 ? '?' : '&') + "X-Amz-Algorithm=AWS4-HMAC-SHA256"
-					+ "&X-Amz-Credential=" + encode(credential)
+					+ "&X-Amz-Credential=" + encodeUrl(credential)
 					+ "&X-Amz-Date=" + time
 					+ "&X-Amz-Expires=600"
-					+ "&X-Amz-SignedHeaders=" + encode(signedHeaders);
+					+ "&X-Amz-SignedHeaders=" + encodeUrl(signedHeaders);
 		}
 
 		// split uri into path and canonical queries

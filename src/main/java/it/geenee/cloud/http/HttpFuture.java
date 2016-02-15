@@ -135,32 +135,19 @@ public abstract class HttpFuture<V> implements Future<V> {
 		}
 	}
 
-	protected abstract class GetHandler extends Handler {
-
-		String pathAndQuery;
-
+	protected abstract class RequestHandler extends Handler {
 		int retryCount = 0;
 
 		// http content received in response from server
 		byte[] content;
 
 
-		public GetHandler(String pathAndQuery) {
-			assert pathAndQuery != null : "path must not be null";
-			assert pathAndQuery.startsWith("/") : "path must start with '/'";
-			this.pathAndQuery = pathAndQuery;
-		}
-
-		public String getPathAndQuery() {
-			return this.pathAndQuery;
-		}
-
 		@Override
 		public void channelActive(ChannelHandlerContext ctx) throws Exception {
 			// connection is established: send http request to server
 
-			// build http request
-			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, this.pathAndQuery);
+			// build http request with empty content
+			FullHttpRequest request = getRequest();//new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, this.method, this.pathAndQuery);
 			HttpHeaders headers = request.headers();
 			headers.set(HttpHeaders.Names.HOST, host);
 			cloud.extendRequest(request, configuration);
@@ -189,13 +176,13 @@ public abstract class HttpFuture<V> implements Future<V> {
 						success(this.content);
 
 						// mark success
-						this.pathAndQuery = null;
+						this.retryCount = -1;
 
 						ctx.close();
 					}
 				} else {
 					// http error (e.g. 400)
-					System.err.println(content.content().toString(HttpCloud.UTF_8));
+					//System.err.println(content.content().toString(HttpCloud.UTF_8));
 					if (content instanceof LastHttpContent) {
 						ctx.close();
 
@@ -208,14 +195,20 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 		@Override
 		protected boolean hasFailed() {
-			// path and query are set to null after calling success()
-			return this.pathAndQuery != null;
+			// retryCount is set to -1 after calling success()
+			return this.retryCount != -1;
 		}
 
 		@Override
 		public boolean retry(int maxRetryCount) {
 			return ++this.retryCount >= maxRetryCount;
 		}
+
+		/**
+		 * Gets called when the http request needs to be created
+		 * @return http request with content
+		 */
+		abstract protected FullHttpRequest getRequest() throws Exception;
 
 		/**
 		 * Gets called when the http get request was successful
