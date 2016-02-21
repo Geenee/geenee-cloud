@@ -90,104 +90,6 @@ public class HttpDownloader extends HttpTransfer {
 		}
 	}
 
-	class PartHandler extends HttpTransfer.Handler {
-		Part part;
-		int position;
-
-		PartHandler(Part part) {
-			this.part = part;
-		}
-
-		@Override
-		public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-			// pipeline gets built
-
-			// part is now initializing
-			this.part.setState(Part.State.INITIATING);
-
-			super.handlerAdded(ctx);
-		}
-
-		@Override
-		public void channelActive(ChannelHandlerContext ctx) throws Exception {
-			// connection is established
-
-			// build uri, addPart version if there is one
-			String uri = remotePath;
-			if (version != null)
-				uri += '?' + cloud.getVersionParameter() + '=' + version;
-
-			// generate HTTP request
-			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri);
-			HttpHeaders headers = request.headers();
-			headers.set(HttpHeaders.Names.HOST, host);
-			long begin = this.part.offset;
-			long end = begin + this.part.length;
-			headers.set(HttpHeaders.Names.RANGE, "bytes=" + begin + '-' + (end - 1));
-			cloud.extendRequest(request, configuration);
-
-			// send the HTTP request
-			ctx.writeAndFlush(request);
-
-			super.channelActive(ctx);
-		}
-
-		@Override
-		public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
-			if (msg instanceof HttpResponse) {
-				HttpResponse response = (HttpResponse) msg;
-
-				// get http response code
-				this.responseCode = response.getStatus().code();
-
-				if (this.responseCode / 100 == 2) {
-					// success: set state of part to PROGRESS
-					this.part.setState(Transfer.Part.State.PROGRESS);
-					this.position = 0;
-				}
-			} else if (msg instanceof HttpContent) {
-				HttpContent content = (HttpContent) msg;
-
-				if (this.responseCode / 100 == 2) {
-					// write content to file
-					ByteBuf buf = content.content();
-					this.position += file.write(buf.nioBuffer(), this.part.offset + this.position);
-
-					if (content instanceof LastHttpContent) {
-						// set state of part to SUCCESS
-						this.part.setState(Transfer.Part.State.DONE);
-
-						// part done, start next part or complete download if no more parts
-						partDone(this.part);
-
-						ctx.close();
-					}
-				} else {
-					// http error (e.g. 400)
-					//System.err.println(content.content().toString(HttpCloud.UTF_8));
-					if (content instanceof LastHttpContent) {
-						ctx.close();
-
-						// check if transfer has failed
-						if (!isRetryCode())
-							cancel();
-					}
-				}
-			}
-		}
-
-		@Override
-		protected boolean hasFailed() {
-			// if state of part is not done (e.g. on read timeout), download of part has failed
-			return this.part.getState() != Part.State.DONE;
-		}
-
-		@Override
-		public boolean retry(int maxRetryCount) {
-			return this.part.retry(maxRetryCount);
-		}
-	}
-
 	public HttpDownloader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath, String version) {
 		super(cloud, configuration, file, host, remotePath);
 
@@ -212,7 +114,19 @@ public class HttpDownloader extends HttpTransfer {
 
 	@Override
 	protected void connect(Part part) {
-		connect(new PartHandler(part));
+		// build path and query, add version if there is one
+		String pathAndQuery = this.remotePath;
+		if (this.version != null)
+			pathAndQuery += '?' + this.cloud.getVersionParameter() + '=' + this.version;
+
+		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
+		connect(new DownloadHandler(pathAndQuery, part) {
+			@Override
+			protected void success(Part part) {
+				// set state of part to SUCCESS (downloaded part has no id)
+				part.success(null);
+			}
+		});
 	}
 
 	void headDone(HttpHeaders headers) throws IOException {
@@ -233,11 +147,6 @@ public class HttpDownloader extends HttpTransfer {
 		this.file.truncate(fileLength);
 
 		startTransfer(fileLength, null);
-	}
-
-	void partDone(Part part) {
-		// a part is done
-		startPart();
 	}
 
 	@Override

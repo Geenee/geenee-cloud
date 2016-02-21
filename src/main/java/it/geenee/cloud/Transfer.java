@@ -86,7 +86,7 @@ public interface Transfer extends Future<Void> {
 			/**
 			 * part is sucessfully transferred
 			 */
-			DONE,
+			SUCCESS,
 
 			/**
 			 * part has failed

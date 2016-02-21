@@ -10,8 +10,6 @@ import java.util.Random;
 
 import it.geenee.cloud.*;
 
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.Assert;
 
@@ -24,7 +22,7 @@ public class AwsStorageTest {
 	String bucket = "efreet-recognition-testing";
 
 	File smallFilePath = new File("small test file");
-	int smallFileSize = 100000;
+	int smallFileSize = 1000000;
 	File largeFilePath = new File("large test file");
 	int largeFileSize = 20000000;
 
@@ -75,7 +73,7 @@ public class AwsStorageTest {
 					case PROGRESS:
 						b.append('p');
 						break;
-					case DONE:
+					case SUCCESS:
 						b.append('D');
 						break;
 					case FAILED:

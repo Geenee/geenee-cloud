@@ -1,15 +1,12 @@
 package it.geenee.cloud.http;
 
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
+import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
-import io.netty.handler.timeout.*;
 
 import it.geenee.cloud.*;
 
@@ -77,7 +74,7 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 		}
 
 		@Override
-		public String getId() {
+		public synchronized String getId() {
 			return this.id;
 		}
 
@@ -86,6 +83,7 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 		public synchronized boolean start() {
 			if (this.state == State.QUEUED) {
 				this.state = State.INITIATING;
+				stateChange();
 				return true;
 			}
 			return false;
@@ -96,9 +94,17 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 			stateChange();
 		}
 
+		public synchronized void success(String id) {
+			this.id = id;
+			this.state = State.SUCCESS;
+			stateChange();
+		}
+
 		public synchronized boolean retry(int maxRetryCount) {
 			if (++this.retryCount >= maxRetryCount) {
 				this.state = State.FAILED;
+
+				// whole transfer fails and will notify state change after setting its state to FAILED
 				return true;
 			}
 			this.state = State.RETRY;
@@ -107,7 +113,248 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 		}
 	}
 
+	public abstract class UploadHandler extends HttpTransfer.Handler {
+		final String pathAndQuery;
+		final Part part;
 
+		static final int CHUNK_SIZE = 8192;
+		boolean uploading = false;
+		long position;
+
+		public UploadHandler(String pathAndQuery, Part part) {
+			this.pathAndQuery = pathAndQuery;
+			this.part = part;
+		}
+
+		@Override
+		public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+			// pipeline gets built
+
+			// part is now initializing
+			this.part.setState(Part.State.INITIATING);
+
+			super.handlerAdded(ctx);
+		}
+
+		@Override
+		public void channelActive(ChannelHandlerContext ctx) throws Exception {
+			// connection is established: send http request to server
+
+			// build http request (without content as we send it on receiving continue 100 status code)
+			HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.PUT, this.pathAndQuery);
+			HttpHeaders headers = request.headers();
+			headers.set(HttpHeaders.Names.HOST, host);
+			headers.set(HttpHeaders.Names.EXPECT, HttpHeaders.Values.CONTINUE);
+			cloud.extendRequest(request, file, this.part.offset, this.part.length, configuration);
+
+			// send the http request
+			ctx.writeAndFlush(request);
+
+			super.channelActive(ctx);
+		}
+
+		@Override
+		public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
+			if (msg instanceof HttpResponse) {
+				HttpResponse response = (HttpResponse) msg;
+
+				// get http response code
+				this.responseCode = response.getStatus().code();
+				if (this.responseCode == 100) {
+					// continue: now start send the part of the file (continues in channelWritabilityChanged())
+					this.uploading = true;
+					this.position = 0;
+					upload(ctx);
+
+					// set state of part to PROGRESS
+					this.part.setState(Part.State.PROGRESS);
+				} else if (this.responseCode / 100 == 2) {
+					// success
+					success(this.part, response.headers());
+
+					// part done, start next part or complete upload if no more parts
+					startPart();
+				}
+			} else if (msg instanceof HttpContent) {
+				HttpContent content = (HttpContent) msg;
+
+				if (this.responseCode == 100) {
+					// continue: keep connection open
+				} else if (this.responseCode / 100 == 2) {
+					// http request succeeded
+					if (content instanceof LastHttpContent) {
+						ctx.close();
+					}
+				} else {
+					// http error (e.g. 400)
+					//System.err.println(content.content().toString(HttpCloud.UTF_8));
+					if (content instanceof LastHttpContent) {
+						ctx.close();
+
+						// check if transfer has failed
+						if (!isRetryCode())
+							cancel();
+					}
+				}
+			}
+		}
+
+		protected abstract void success(Part part, HttpHeaders headers);
+
+		@Override
+		public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
+			if (this.uploading)
+				upload(ctx);
+			ctx.fireChannelWritabilityChanged();
+		}
+
+		void upload(ChannelHandlerContext ctx) throws IOException {
+			Channel channel = ctx.channel();
+			while (channel.isWritable()) {
+				if (this.position >= this.part.length) {
+					// send last chunk for this input
+					ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
+					this.uploading = false;
+					break;
+				} else {
+					int bufferSize = (int) Math.min(CHUNK_SIZE, this.part.length - position);
+					ByteBuf buffer = ctx.alloc().heapBuffer(bufferSize);
+
+					boolean release = true;
+					try {
+						buffer.writerIndex(bufferSize);
+						//System.out.println("read o: " + (this.offset + this.position) + " s: " + bufferSize);
+						file.read(buffer.nioBuffer(), this.part.offset + this.position);
+						this.position += bufferSize;
+						release = false;
+						ctx.writeAndFlush(new DefaultHttpContent(buffer));
+					} finally {
+						if (release) {
+							buffer.release();
+						}
+					}
+				}
+			}
+		}
+
+		@Override
+		protected boolean hasFailed() {
+			// if state of part is not done (e.g. on read timeout), upload of part has failed
+			return this.part.getState() != Part.State.SUCCESS;
+		}
+
+		@Override
+		public boolean retry(int maxRetryCount) {
+			return this.part.retry(maxRetryCount);
+		}
+	}
+
+	abstract class DownloadHandler extends HttpTransfer.Handler {
+		final String pathAndQuery;
+		final Part part;
+
+		int position;
+
+		DownloadHandler(String pathAndQuery, Part part) {
+			this.pathAndQuery = pathAndQuery;
+			this.part = part;
+		}
+
+		@Override
+		public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+			// pipeline gets built
+
+			// part is now initializing
+			this.part.setState(Part.State.INITIATING);
+
+			super.handlerAdded(ctx);
+		}
+
+		@Override
+		public void channelActive(ChannelHandlerContext ctx) throws Exception {
+			// connection is established
+
+			// generate HTTP request
+			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, this.pathAndQuery);
+			HttpHeaders headers = request.headers();
+			headers.set(HttpHeaders.Names.HOST, host);
+			long begin = this.part.offset;
+			long end = begin + this.part.length;
+			headers.set(HttpHeaders.Names.RANGE, "bytes=" + begin + '-' + (end - 1));
+			cloud.extendRequest(request, configuration);
+
+			// send the HTTP request
+			ctx.writeAndFlush(request);
+
+			super.channelActive(ctx);
+		}
+
+		@Override
+		public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
+			if (msg instanceof HttpResponse) {
+				HttpResponse response = (HttpResponse) msg;
+
+				// get http response code
+				this.responseCode = response.getStatus().code();
+
+				if (this.responseCode / 100 == 2) {
+					// success: set state of part to PROGRESS
+					this.part.setState(Transfer.Part.State.PROGRESS);
+					this.position = 0;
+				}
+			} else if (msg instanceof HttpContent) {
+				HttpContent content = (HttpContent) msg;
+
+				if (this.responseCode / 100 == 2) {
+					// write content to file
+					ByteBuf buf = content.content();
+					this.position += file.write(buf.nioBuffer(), this.part.offset + this.position);
+
+					if (content instanceof LastHttpContent) {
+						// success
+						success(this.part);
+
+						// part done, start next part or complete upload if no more parts
+						startPart();
+
+						ctx.close();
+					}
+				} else {
+					// http error (e.g. 400)
+					//System.err.println(content.content().toString(HttpCloud.UTF_8));
+					if (content instanceof LastHttpContent) {
+						ctx.close();
+
+						// check if transfer has failed
+						if (!isRetryCode())
+							cancel();
+					}
+				}
+			}
+		}
+
+		protected abstract void success(Part part);
+
+		@Override
+		protected boolean hasFailed() {
+			// if state of part is not done (e.g. on read timeout), download of part has failed
+			return this.part.getState() != Part.State.SUCCESS;
+		}
+
+		@Override
+		public boolean retry(int maxRetryCount) {
+			return this.part.retry(maxRetryCount);
+		}
+	}
+
+	/**
+	 * Constructor
+	 * @param cloud the HttpCloud instance
+	 * @param configuration configuration
+	 * @param file file channel of the file to upload or download. Only read and write with explicit position are used
+	 * @param host host to connect to
+	 * @param remotePath remote path of file
+	 */
 	public HttpTransfer(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath) {
 		super(cloud, configuration, host, true);
 
@@ -196,15 +443,11 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 
 		// all parts are already started: check if parts still in progress
 		for (Part part : this.parts) {
-			if (part.getState() != Part.State.DONE)
+			if (part.getState() != Part.State.SUCCESS)
 				return;
 		}
 
-		// all parts are done
-		setState(State.COMPLETING);
-		stateChange();
-
-		// complete transfer
+		// all parts are done: complete transfer
 		completeTransfer();
 	}
 

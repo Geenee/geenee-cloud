@@ -40,110 +40,6 @@ public class AwsMultipartUploader extends HttpTransfer {
 		}
 	}
 
-	// http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadUploadPart.html
-	class PartHandler extends Handler {
-		Part part;
-
-		PartHandler(Part part) {
-			this.part = part;
-		}
-
-		@Override
-		public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-			// pipeline gets built
-
-			// part is now initializing
-			this.part.setState(Part.State.INITIATING);
-
-			// add handler for file upload after http handler
-			ctx.pipeline().addAfter("http", "writer", new ChunkedWriteHandler());
-
-			super.handlerAdded(ctx);
-		}
-
-		@Override
-		public void channelActive(ChannelHandlerContext ctx) throws Exception {
-			// connection is established: send http request to server
-
-			// build uri for upload part
-			String uri = remotePath + "?partNumber=" + (this.part.index + 1) + "&uploadId=" + id;
-			//System.out.println("PartHandler.channelActive uri: " + uri);
-
-			// build http request (without content as we send it on receiving continue 100 status code)
-			HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.PUT, uri);
-			HttpHeaders headers = request.headers();
-			headers.set(HttpHeaders.Names.HOST, host);
-			headers.set(HttpHeaders.Names.EXPECT, HttpHeaders.Values.CONTINUE);
-			cloud.extendRequest(request, file, this.part.offset, this.part.length, configuration);
-
-			// send the http request
-			ctx.writeAndFlush(request);
-
-			super.channelActive(ctx);
-		}
-
-		@Override
-		public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
-			if (msg instanceof HttpResponse) {
-				HttpResponse response = (HttpResponse) msg;
-
-				// get http response code
-				this.responseCode = response.getStatus().code();
-				//System.out.println("PartHandler.channelRead0 code: " + this.responseCode);
-
-				if (this.responseCode == 100) {
-					// continue: now send the part of the file
-					ctx.writeAndFlush(new ChunkedContent(file, this.part.offset, this.part.length, 8192),
-							ctx.newProgressivePromise());
-
-					// set state of part to PROGRESS
-					this.part.setState(Part.State.PROGRESS);
-				} else if (this.responseCode / 100 == 2) {
-					// success: get ETag of part
-					this.part.id = response.headers().get("ETag");
-
-					// set state of part to SUCCESS
-					this.part.setState(Part.State.DONE);
-
-					// part done, start next part or complete upload if no more parts
-					partDone(this.part);
-				}
-			} else if (msg instanceof HttpContent) {
-				HttpContent content = (HttpContent) msg;
-
-				if (this.responseCode == 100) {
-					// continue: keep connection open
-				} else if (this.responseCode / 100 == 2) {
-					// http request succeeded
-					if (content instanceof LastHttpContent) {
-						ctx.close();
-					}
-				} else {
-					// http error (e.g. 400)
-					//System.err.println("part " + content.content().toString(HttpCloud.UTF_8));
-					if (content instanceof LastHttpContent) {
-						ctx.close();
-
-						// check if transfer has failed
-						if (!isRetryCode())
-							cancel();
-					}
-				}
-			}
-		}
-
-		@Override
-		protected boolean hasFailed() {
-			// if state of part is not done (e.g. on read timeout), upload of part has failed
-			return this.part.getState() != Part.State.DONE;
-		}
-
-		@Override
-		public boolean retry(int maxRetryCount) {
-			return this.part.retry(maxRetryCount);
-		}
-	}
-
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadComplete.html
 	class CompleteHandler extends HttpTransfer.RequestHandler {
 		CompleteMultipartUpload completeMultipartUpload;
@@ -189,7 +85,14 @@ public class AwsMultipartUploader extends HttpTransfer {
 
 	@Override
 	protected void connect(Part part) {
-		connect(new PartHandler(part));
+		// http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadUploadPart.html
+		connect(new UploadHandler(remotePath + "?partNumber=" + (part.index + 1) + "&uploadId=" + id, part) {
+			@Override
+			protected void success(Part part, HttpHeaders headers) {
+				// set state of part to SUCCESS (ETag is id of uploaded part)
+				part.success(headers.get("ETag"));
+			}
+		});
 	}
 
 	void initiateDone(InitiateMultipartUploadResult result) throws IOException {
@@ -198,13 +101,11 @@ public class AwsMultipartUploader extends HttpTransfer {
 		startTransfer(this.file.size(), result.uploadId);
 	}
 
-	void partDone(Part part) {
-		// a part is done
-		startPart();
-	}
-
 	@Override
 	protected void completeTransfer() {
+		// all parts are done, but we need a completion step
+		setState(State.COMPLETING);
+
 		// complete multipart upload
 		CompleteMultipartUpload completeMultipartUpload = new CompleteMultipartUpload();
 		for (Part part : this.parts) {
