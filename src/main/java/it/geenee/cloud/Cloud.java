@@ -18,10 +18,13 @@ public interface Cloud {
 	class Configure {
 		String region = null;
 		Credentials credentials =  null;
-		int partSize = 0;
-		int channelCount = 0;
 		int timeout = 0;
 		int retryCount = 0;
+
+		// storage specific
+		int partSize = 0;
+		int channelCount = 0;
+		String prefix = null;
 
 		public Configure region(String region) {
 			this.region = region;
@@ -30,6 +33,16 @@ public interface Cloud {
 
 		public Configure credentials(Credentials credentials) {
 			this.credentials = credentials;
+			return this;
+		}
+
+		public Configure timeout(int timeout) {
+			this.timeout = timeout;
+			return this;
+		}
+
+		public Configure retryCount(int retryCount) {
+			this.retryCount = retryCount;
 			return this;
 		}
 
@@ -51,13 +64,12 @@ public interface Cloud {
 			return this;
 		}
 
-		public Configure timeout(int timeout) {
-			this.timeout = timeout;
-			return this;
-		}
-
-		public Configure retryCount(int retryCount) {
-			this.retryCount = retryCount;
+		/**
+		 * @param prefix path prefix for storage operations
+		 * @return configuration builder
+		 */
+		public Configure prefix(String prefix) {
+			this.prefix = prefix;
 			return this;
 		}
 
@@ -65,10 +77,11 @@ public interface Cloud {
 			return new Configuration(
 					this.region,
 					this.credentials,
+					this.timeout,
+					this.retryCount,
 					this.partSize,
 					this.channelCount,
-					this.timeout,
-					this.retryCount);
+					this.prefix);
 		}
 	}
 

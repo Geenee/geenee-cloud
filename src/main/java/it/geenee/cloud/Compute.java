@@ -8,15 +8,7 @@ import java.util.concurrent.ExecutionException;
 
 public interface Compute {
 
-	/**
-	 * Get the tags associated with the given resource (instance id, ami id etc.)
-	 * @return future for tag key/value pairs
-	 */
-	Future<Map<String, String>> startGetTags(String resourceId);
-	default Map<String, String> getTags(String resourceId) throws InterruptedException, ExecutionException {
-		return startGetTags(resourceId).get();
-	}
-
+	// instances
 
 	interface Instances {
 		/**
@@ -40,5 +32,21 @@ public interface Compute {
 		}
 	}
 
+	/**
+	 * Returns an object for retrieving info about instances. You can add filters to list only specific intances.
+	 * For example use like this: compute.instances().filterZone("eu-central-1a").filterTag("Role", "master").get();
+	 * @return instance lister object
+	 */
 	Instances instances();
+
+	// tags
+
+	/**
+	 * Get the tags associated with the given resource (instance id, ami id etc.)
+	 * @return future for tag key/value pairs
+	 */
+	Future<Map<String, String>> startGetTags(String resourceId);
+	default Map<String, String> getTags(String resourceId) throws InterruptedException, ExecutionException {
+		return startGetTags(resourceId).get();
+	}
 }

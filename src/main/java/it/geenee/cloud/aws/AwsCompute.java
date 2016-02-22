@@ -5,6 +5,7 @@ import io.netty.util.concurrent.Future;
 import it.geenee.cloud.Compute;
 import it.geenee.cloud.Configuration;
 import it.geenee.cloud.InstanceInfo;
+import it.geenee.cloud.http.AwsGetInstance;
 import it.geenee.cloud.http.HttpCloud;
 
 import javax.xml.bind.JAXBContext;
@@ -27,35 +28,7 @@ public class AwsCompute implements Compute {
 		this.host = host;
 	}
 
-	@Override
-	public Future<Map<String, String>> startGetTags(String resourceId) {
-		// http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeTags.html
-		final String pathAndQuery = "/?Action=DescribeTags&Filter.1.Name=resource-id&Filter.1.Value.1=" + resourceId + AwsCloud.EC2_QUERY;
-		final Map<String, String> map = new HashMap<>();
-		return new AwsRequest<Map<String, String>>(this.cloud, this.configuration, this.host, HttpMethod.GET, pathAndQuery) {
-			@Override
-			protected void success(ByteArrayInputStream content) throws Exception {
-				// parse xml
-				JAXBContext jc = JAXBContext.newInstance(DescribeTagsResponse.class);
-				Unmarshaller unmarshaller = jc.createUnmarshaller();
-				DescribeTagsResponse response = (DescribeTagsResponse) unmarshaller.unmarshal(content);
-
-				// copy tags to map
-				if (response.tagSet != null && response.tagSet.items != null) {
-					for (DescribeTagsResponse.Item item : response.tagSet.items) {
-						map.put(item.key, item.value);
-					}
-				}
-
-				// either repeat or finished
-				if (response.nextToken != null) {
-					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken)));
-				} else {
-					setSuccess(map);
-				}
-			}
-		};
-	}
+	// instances
 
 	@Override
 	public Instances instances() {
@@ -143,4 +116,35 @@ public class AwsCompute implements Compute {
 		};
 	}
 
+	// tags
+
+	@Override
+	public Future<Map<String, String>> startGetTags(String resourceId) {
+		// http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeTags.html
+		final String pathAndQuery = "/?Action=DescribeTags&Filter.1.Name=resource-id&Filter.1.Value.1=" + resourceId + AwsCloud.EC2_QUERY;
+		final Map<String, String> map = new HashMap<>();
+		return new AwsRequest<Map<String, String>>(this.cloud, this.configuration, this.host, HttpMethod.GET, pathAndQuery) {
+			@Override
+			protected void success(ByteArrayInputStream content) throws Exception {
+				// parse xml
+				JAXBContext jc = JAXBContext.newInstance(DescribeTagsResponse.class);
+				Unmarshaller unmarshaller = jc.createUnmarshaller();
+				DescribeTagsResponse response = (DescribeTagsResponse) unmarshaller.unmarshal(content);
+
+				// copy tags to map
+				if (response.tagSet != null && response.tagSet.items != null) {
+					for (DescribeTagsResponse.Item item : response.tagSet.items) {
+						map.put(item.key, item.value);
+					}
+				}
+
+				// either repeat or finished
+				if (response.nextToken != null) {
+					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken)));
+				} else {
+					setSuccess(map);
+				}
+			}
+		};
+	}
 }

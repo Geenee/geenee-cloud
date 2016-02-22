@@ -24,7 +24,14 @@ import it.geenee.cloud.http.HttpCloud;
 public class AwsCloud extends HttpCloud {
 
 	public static final String DEFAULT_REGION = "us-east-1";
-	public static final Configuration DEFAULT_CONFIGURATION = new Configuration(DEFAULT_REGION, null, 8 * 1024 * 1024, 5, 60, 3);
+	public static final Configuration DEFAULT_CONFIGURATION = new Configuration(
+			DEFAULT_REGION,
+			null, // credentials
+			60, // timeout
+			3, // retry count
+			8 * 1024 * 1024, // part size (must be more than 5MB for S3)
+			5, // number of parallel threads
+			null); // path prefix
 	public static final String EC2_VERSION = "2015-10-01";
 
 	protected static final String EC2_QUERY = "&Version=" + EC2_VERSION;
@@ -95,12 +102,12 @@ public class AwsCloud extends HttpCloud {
 				}
 			}
 		} catch (IOException e) {
-			return null;
 		}
 
 		if (accessKey != null && secretAccessKey != null)
 			return new Credentials(accessKey, secretAccessKey);
-		return null;
+
+		throw new IllegalArgumentException("No AWS profile named '" + user + '\'');
 	}
 
 	// this instance

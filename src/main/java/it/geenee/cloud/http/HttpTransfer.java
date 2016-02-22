@@ -422,7 +422,7 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 		setState(State.PROGRESS);
 
 		// start first parts
-		int startCount = Math.min(partCount, this.configuration.threadCount);
+		int startCount = Math.min(partCount, this.configuration.channelCount);
 		for (int i = 0; i < startCount; ++i) {
 			Part part = parts.get(i);
 			part.start();

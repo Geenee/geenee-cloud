@@ -10,6 +10,9 @@ public class FileInfo {
 	// hash of the file, null if this is a delete marker
 	public final String hash;
 
+	// size of file
+	public final long size;
+
 	// timestamp in iso format and utc time zone
 	public final String timestamp;
 
@@ -20,9 +23,10 @@ public class FileInfo {
 	public final boolean latest;
 
 
-	public FileInfo(String path, String hash, String timestamp, String version, boolean latest) {
+	public FileInfo(String path, String hash, long size, String timestamp, String version, boolean latest) {
 		this.path = path;
 		this.hash = hash;
+		this.size = size;
 		this.timestamp = timestamp;
 		this.version = version;
 		this.latest = latest;
@@ -33,6 +37,7 @@ public class FileInfo {
 		b.append('{');
 		Configuration.append(b, "path", this.path);
 		Configuration.append(b, "hash", this.hash);
+		Configuration.append(b, "size", this.size);
 		Configuration.append(b, "timestamp", this.timestamp);
 		Configuration.append(b, "version", this.version);
 		Configuration.append(b, "latest", this.latest);

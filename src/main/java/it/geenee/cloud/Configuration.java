@@ -6,18 +6,22 @@ package it.geenee.cloud;
 public class Configuration {
 	public final String region;
 	public final Credentials credentials;
-	public final int partSize;
-	public final int threadCount;
 	public final int timeout;
 	public final int retryCount;
 
-	public Configuration(String region, Credentials credentials, int partSize, int threadCount, int timeout, int retryCount) {
+	// storage specific
+	public final int partSize;
+	public final int channelCount;
+	public final String prefix;
+
+	public Configuration(String region, Credentials credentials, int timeout, int retryCount, int partSize, int channelCount, String prefix) {
 		this.region = region;
 		this.credentials = credentials;
-		this.partSize = partSize;
-		this.threadCount = threadCount;
 		this.timeout = timeout;
 		this.retryCount = retryCount;
+		this.partSize = partSize;
+		this.channelCount = channelCount;
+		this.prefix = prefix;
 	}
 
 	public Configuration merge(Configuration configuration) {
@@ -26,10 +30,11 @@ public class Configuration {
 		return new Configuration(
 				configuration.region != null ? configuration.region : this.region,
 				configuration.credentials != null ? configuration.credentials : this.credentials,
-				configuration.partSize > 0 ? configuration.partSize : this.partSize,
-				configuration.threadCount > 0 ? configuration.threadCount : this.threadCount,
 				configuration.timeout > 0 ? configuration.timeout : this.timeout,
-				configuration.retryCount > 0 ? configuration.retryCount : this.retryCount
+				configuration.retryCount > 0 ? configuration.retryCount : this.retryCount,
+				configuration.partSize > 0 ? configuration.partSize : this.partSize,
+				configuration.channelCount > 0 ? configuration.channelCount : this.channelCount,
+				configuration.prefix != null ? configuration.prefix : this.prefix
 		);
 	}
 
@@ -51,10 +56,14 @@ public class Configuration {
 			b.append('"');
 		return b;
 	}
+	static StringBuilder append(StringBuilder b, String key, long value) {
+		appendKey(b, key);
+		b.append(value);
+		return b;
+	}
 	static StringBuilder append(StringBuilder b, String key, boolean value) {
 		appendKey(b, key);
 		b.append(value);
 		return b;
 	}
-
 }

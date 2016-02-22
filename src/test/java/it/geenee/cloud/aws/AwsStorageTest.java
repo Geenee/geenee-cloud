@@ -15,8 +15,6 @@ import org.junit.Assert;
 
 
 public class AwsStorageTest {
-	Storage storage;
-
 	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-upload-testing");
 	String region = "eu-central-1";
 	String bucket = "efreet-recognition-testing";
@@ -24,7 +22,10 @@ public class AwsStorageTest {
 	File smallFilePath = new File("small test file");
 	int smallFileSize = 1000000;
 	File largeFilePath = new File("large test file");
-	int largeFileSize = 20000000;
+	int largeFileSize = (AwsCloud.DEFAULT_CONFIGURATION.partSize * 3) / 2; // 2.5 parts
+
+	Storage storage;
+	Storage prefixedStorage;
 
 
 	public AwsStorageTest() throws IOException {
@@ -36,6 +37,7 @@ public class AwsStorageTest {
 				.build();
 		Cloud cloud = new AwsCloud(configuration);
 		this.storage = cloud.getStorage();
+		this.prefixedStorage = cloud.getStorage(Cloud.configure().prefix(bucket).build());
 	}
 
 	void generateFile(File path, int size) throws IOException {
@@ -156,7 +158,7 @@ public class AwsStorageTest {
 			System.out.println(uploadInfo.toString());
 
 			// delete incomplete upload
-			this.storage.deleteUpload(uploadInfo.path, uploadInfo.uploadId);
+			this.storage.deleteUpload(bucket + uploadInfo.path, uploadInfo.uploadId);
 		}
 	}
 
@@ -166,9 +168,20 @@ public class AwsStorageTest {
 		System.out.println(fileMap);
 
 		List<FileInfo> fileInfos = this.storage.getFiles(bucket, Storage.ListMode.VERSIONED_DELETED_ALL);
+		List<FileInfo> prefixedFileInfos = this.prefixedStorage.getFiles("", Storage.ListMode.VERSIONED_DELETED_ALL);
 
 		for (FileInfo fileInfo : fileInfos) {
 			System.out.println(fileInfo.toString());
+		}
+
+		int size = fileInfos.size();
+		if (size == prefixedFileInfos.size()) {
+			for (int i = 0; i < size; ++i) {
+				Assert.assertEquals(fileInfos.get(i).path, fileInfos.get(i).path);
+			}
+		} else {
+			// the two file lists are different
+			Assert.fail();
 		}
 	}
 }
