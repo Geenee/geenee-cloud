@@ -3,7 +3,6 @@ package it.geenee.cloud.http;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
 
@@ -28,7 +27,7 @@ public class HttpDownloader extends HttpTransfer {
 			// connection is established
 
 			// build uri, addPart version if there is one
-			String uri = remotePath;
+			String uri = urlPath;
 			if (this.version != null)
 				uri += '?' + cloud.getVersionParameter() + '=' + this.version;
 
@@ -115,12 +114,12 @@ public class HttpDownloader extends HttpTransfer {
 	@Override
 	protected void connect(Part part) {
 		// build path and query, add version if there is one
-		String pathAndQuery = this.remotePath;
+		String urlPath = this.urlPath;
 		if (this.version != null)
-			pathAndQuery += '?' + this.cloud.getVersionParameter() + '=' + this.version;
+			urlPath += '?' + this.cloud.getVersionParameter() + '=' + this.version;
 
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
-		connect(new DownloadHandler(pathAndQuery, part) {
+		connect(new DownloadHandler(urlPath, part) {
 			@Override
 			protected void success(Part part) {
 				// set state of part to SUCCESS (downloaded part has no id)
@@ -151,6 +150,6 @@ public class HttpDownloader extends HttpTransfer {
 
 	@Override
 	protected void completeTransfer() {
-		setState(State.SUCCESS);
+		setSuccess(null);
 	}
 }

@@ -20,13 +20,23 @@ public interface Storage {
 	String calculateHash(FileChannel file) throws Exception;
 
 	/**
+	 * returns the url of the storage extended by the given remote path, e.g. "https://s3.eu-central-1.amazonaws.com/foo/bar"
+	 * @param remotePath
+	 * @return url of storage
+	 */
+	String getUrl(String remotePath);
+
+	/**
 	 * Download a file
 	 * @param file file to download to
 	 * @param remotePath path to file in cloud storage
 	 * @param version version to download, null for current version
 	 * @return
 	 */
-	Transfer startDownload(FileChannel file, String remotePath, String version) throws IOException;
+	Transfer startDownload(FileChannel file, String remotePath, String version);
+	default void download(FileChannel file, String remotePath, String version) throws InterruptedException, ExecutionException {
+		startDownload(file, remotePath, version).get();
+	}
 
 	/**
 	 * Upload a file
@@ -34,7 +44,10 @@ public interface Storage {
 	 * @param remotePath path to file in cloud storage
 	 * @return
 	 */
-	Transfer startUpload(FileChannel file, String remotePath) throws IOException;
+	Transfer startUpload(FileChannel file, String remotePath);
+	default void upload(FileChannel file, String remotePath) throws InterruptedException, ExecutionException {
+		startUpload(file, remotePath).get();
+	}
 
 	/**
 	 * Get a list of all files that have the given remote path as prefix. The result is returned as a map from file path to file hash which is convenient

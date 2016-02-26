@@ -147,7 +147,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 			// connection is established: send http request to server
 
 			// build http request with empty content
-			FullHttpRequest request = getRequest();//new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, this.method, this.pathAndQuery);
+			FullHttpRequest request = getRequest();
 			HttpHeaders headers = request.headers();
 			headers.set(HttpHeaders.Names.HOST, host);
 			cloud.extendRequest(request, configuration);
@@ -304,17 +304,25 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 	@Override
 	public synchronized Future<V> addListener(GenericFutureListener<? extends Future<? super V>> listener) {
-		// is this the way to do it?
 		GenericFutureListener<HttpFuture<V>> l = (GenericFutureListener<HttpFuture<V>>) listener;
-		this.listeners.add(l);
+		if (this.state == Transfer.State.SUCCESS || this.state == Transfer.State.FAILED || this.state == Transfer.State.CANCELLED) {
+			// complete: call listener immediately
+			try {
+				l.operationComplete(this);
+			} catch (Exception e) {
+				// don't know what to do with the exception
+			}
+		} else {
+			// add listener to listener list
+			this.listeners.add(l);
+		}
 		return this;
 	}
 
 	@Override
-	public synchronized Future<V> addListeners(GenericFutureListener<? extends Future<? super V>>... listeners) {
+	public Future<V> addListeners(GenericFutureListener<? extends Future<? super V>>... listeners) {
 		for (GenericFutureListener<? extends Future<? super V>> listener : listeners) {
-			GenericFutureListener<HttpFuture<V>> l = (GenericFutureListener<HttpFuture<V>>) listener;
-			this.listeners.add(l);
+			addListener(listener);
 		}
 		return this;
 	}

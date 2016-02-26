@@ -31,7 +31,7 @@ public class AwsCloud extends HttpCloud {
 			3, // retry count
 			8 * 1024 * 1024, // part size (must be more than 5MB for S3)
 			5, // number of parallel threads
-			null); // path prefix
+			""); // path prefix
 	public static final String EC2_VERSION = "2015-10-01";
 
 	protected static final String EC2_QUERY = "&Version=" + EC2_VERSION;

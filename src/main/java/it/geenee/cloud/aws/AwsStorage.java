@@ -71,24 +71,27 @@ public class AwsStorage implements Storage {
 	}
 
 	@Override
-	public Transfer startDownload(FileChannel file, String remotePath, String version) throws IOException {
-		String pathAndQuery = HttpCloud.encodePath('/' + remotePath);
-		return new HttpDownloader(this.cloud, this.configuration, file, host, pathAndQuery, version);
+	public String getUrl(String remotePath) {
+		return "https://" + this.host + HttpCloud.encodePath('/' + this.configuration.prefix + remotePath);
 	}
 
 	@Override
-	public Transfer startUpload(FileChannel file, String remotePath) throws IOException {
-		String pathAndQuery = HttpCloud.encodePath('/' + remotePath);
-		if (file.size() <= this.configuration.partSize)
-			return new AwsUploader(this.cloud, this.configuration, file, host, pathAndQuery);
-		return new AwsMultipartUploader(this.cloud, this.configuration, file, host, pathAndQuery);
+	public Transfer startDownload(FileChannel file, String remotePath, String version) {
+		String urlPath = HttpCloud.encodePath('/' + this.configuration.prefix + remotePath);
+		return new HttpDownloader(this.cloud, this.configuration, file, this.host, urlPath, version);
+	}
+
+	@Override
+	public Transfer startUpload(FileChannel file, String remotePath) {
+		String urlPath = HttpCloud.encodePath('/' + this.configuration.prefix + remotePath);
+		return AwsUploader.create(this.cloud, this.configuration, file, this.host, urlPath);
 	}
 
 	@Override
 	public Future<Map<String, String>> startGetFiles(final String remotePath) {
-		final String pathAndQuery = encodePathPrefix(remotePath);
+		final String urlPath = encodePathPrefix(remotePath);
 		final Map<String, String> map = new HashMap<>();
-		return new AwsRequest<Map<String, String>>(this.cloud, this.configuration, this.host, HttpMethod.GET, pathAndQuery) {
+		return new AwsRequest<Map<String, String>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
 			@Override
 			protected void success(ByteArrayInputStream content) throws Exception {
 				// parse xml
@@ -106,7 +109,7 @@ public class AwsStorage implements Storage {
 				// either repeat or finished
 				if (result.isTruncated) {
 					String marker = result.contents.get(result.contents.size()-1).key;
-					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "marker", marker)));
+					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker)));
 				} else {
 					setSuccess(map);
 				}
@@ -119,8 +122,8 @@ public class AwsStorage implements Storage {
 		final List<FileInfo> list = new ArrayList<>();
 		if (mode == ListMode.UNVERSIONED) {
 			// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html
-			final String pathAndQuery = encodePathPrefix(remotePath);
-			return new AwsRequest<List<FileInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, pathAndQuery) {
+			final String urlPath = encodePathPrefix(remotePath);
+			return new AwsRequest<List<FileInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
 				@Override
 				protected void success(ByteArrayInputStream content) throws Exception {
 					// parse xml
@@ -144,7 +147,7 @@ public class AwsStorage implements Storage {
 					// either repeat or finished
 					if (result.isTruncated) {
 						String marker = result.contents.get(result.contents.size() - 1).key;
-						connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "marker", marker)));
+						connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker)));
 					} else {
 						setSuccess(list);
 					}
@@ -152,8 +155,8 @@ public class AwsStorage implements Storage {
 			};
 		} else {
 			// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGETVersion.html
-			final String pathAndQuery = HttpCloud.addQuery(encodePathPrefix(remotePath), "versions");
-			return new AwsRequest<List<FileInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, pathAndQuery) {
+			final String urlPath = HttpCloud.addQuery(encodePathPrefix(remotePath), "versions");
+			return new AwsRequest<List<FileInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
 				@Override
 				protected void success(ByteArrayInputStream content) throws Exception {
 					// parse xml
@@ -191,10 +194,10 @@ public class AwsStorage implements Storage {
 
 					// either repeat or finished
 					if (result.isTruncated) {
-						String pq = pathAndQuery;
-						pq = HttpCloud.addQuery(pq, "key-marker", result.keyMarker);
-						pq = HttpCloud.addQuery(pq, "version-id-marker", result.versionIdMarker);
-						connect(new ListHandler(HttpMethod.GET, pq));
+						String p = urlPath;
+						p = HttpCloud.addQuery(p, "key-marker", result.keyMarker);
+						p = HttpCloud.addQuery(p, "version-id-marker", result.versionIdMarker);
+						connect(new ListHandler(HttpMethod.GET, p));
 					} else {
 						setSuccess(list);
 					}
@@ -206,9 +209,9 @@ public class AwsStorage implements Storage {
 	@Override
 	public Future<List<UploadInfo>> startGetUploads(final String remotePath) {
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadListMPUpload.html
-		final String pathAndQuery = HttpCloud.addQuery(encodePathPrefix(remotePath), "uploads");
+		final String urlPath = HttpCloud.addQuery(encodePathPrefix(remotePath), "uploads");
 		final List<UploadInfo> list = new ArrayList<>();
-		return new AwsRequest<List<UploadInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, pathAndQuery) {
+		return new AwsRequest<List<UploadInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
 			@Override
 			protected void success(ByteArrayInputStream content) throws Exception {
 				// parse xml
@@ -228,10 +231,10 @@ public class AwsStorage implements Storage {
 
 				// either repeat or finished
 				if (result.isTruncated) {
-					String pq = pathAndQuery;
-					pq = HttpCloud.addQuery(pq, "key-marker", result.nextKeyMarker);
-					pq = HttpCloud.addQuery(pq, "upload-id-marker", result.nextUploadIdMarker);
-					connect(new ListHandler(HttpMethod.GET, pq));
+					String p = urlPath;
+					p = HttpCloud.addQuery(p, "key-marker", result.nextKeyMarker);
+					p = HttpCloud.addQuery(p, "upload-id-marker", result.nextUploadIdMarker);
+					connect(new ListHandler(HttpMethod.GET, p));
 				} else {
 					setSuccess(list);
 				}
@@ -243,11 +246,11 @@ public class AwsStorage implements Storage {
 	@Override
 	public Future<Void> startDeleteFile(String remotePath, String version) {
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-		String path = encodePath(remotePath);
+		String urlPath = encodePath(remotePath);
 		if (version != null)
-			path = HttpCloud.addQuery(path, "versionId");
+			urlPath = HttpCloud.addQuery(urlPath, "versionId");
 
-		return new AwsRequest<Void>(this.cloud, this.configuration, this.host, HttpMethod.DELETE, path) {
+		return new AwsRequest<Void>(this.cloud, this.configuration, this.host, HttpMethod.DELETE, urlPath) {
 			@Override
 			protected void success(ByteArrayInputStream content) throws Exception {
 				setSuccess(null);
@@ -273,14 +276,13 @@ public class AwsStorage implements Storage {
 	String encodePath(String remotePath) {
 		StringBuilder path = new StringBuilder();
 		path.append('/');
-		if (this.configuration.prefix != null)
-			path.append(this.configuration.prefix);
+		path.append(this.configuration.prefix);
 		path.append(remotePath);
 		return HttpCloud.encodePath(path.toString());
 	}
 
 	String encodePathPrefix(String remotePath) {
-		if (this.configuration.prefix != null)
+		if (!this.configuration.prefix.isEmpty())
 			remotePath = this.configuration.prefix + remotePath;
 		int pos = remotePath.indexOf('/');
 		if (pos == -1)
@@ -294,15 +296,13 @@ public class AwsStorage implements Storage {
 	}
 
 	String getPath(String key, String remotePath) {
-		if (this.configuration.prefix != null) {
-			int pos = this.configuration.prefix.indexOf('/');
-			if (pos != -1)
-				return key.substring(this.configuration.prefix.length() - (pos + 1) + remotePath.length());
-		}
+		int pos = this.configuration.prefix.indexOf('/');
+		if (pos != -1)
+			return key.substring(this.configuration.prefix.length() - (pos + 1) + remotePath.length());
 
-		int pos = remotePath.indexOf('/');
+		pos = remotePath.indexOf('/');
 		if (pos == -1) {
-			// remotePath is just a bucket without trailing slash. ensure that remotePath + path is a new valid remotePath
+			// urlPath is just a bucket without trailing slash. ensure that urlPath + path is a new valid urlPath
 			return '/' + key;
 		}
 		return key.substring(remotePath.length() - (pos + 1));

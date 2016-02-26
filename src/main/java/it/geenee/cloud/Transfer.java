@@ -133,7 +133,7 @@ public interface Transfer extends Future<Void> {
 	String getUrl();
 
 	/**
-	 * Get number of parts
+	 * Get number of parts if not in INITIATING state
 	 * @return number of parts
 	 */
 	int getPartCount();

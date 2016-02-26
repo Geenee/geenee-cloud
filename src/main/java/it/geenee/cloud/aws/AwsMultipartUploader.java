@@ -3,12 +3,9 @@ package it.geenee.cloud.aws;
 import java.io.*;
 import java.nio.channels.FileChannel;
 
-import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
-import io.netty.handler.stream.ChunkedWriteHandler;
 
 import it.geenee.cloud.*;
-import it.geenee.cloud.ChunkedContent;
 import it.geenee.cloud.http.HttpCloud;
 import it.geenee.cloud.http.HttpTransfer;
 
@@ -25,7 +22,7 @@ public class AwsMultipartUploader extends HttpTransfer {
 	class InitiateHandler extends HttpTransfer.RequestHandler {
 		@Override
 		protected FullHttpRequest getRequest() throws Exception {
-			return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, remotePath + "?uploads");
+			return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, urlPath + "?uploads");
 		}
 
 		@Override
@@ -50,7 +47,7 @@ public class AwsMultipartUploader extends HttpTransfer {
 
 		@Override
 		protected FullHttpRequest getRequest() throws Exception {
-			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, remotePath + "?uploadId=" + id);
+			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, urlPath + "?uploadId=" + id);
 
 			// set CompleteMultipartUpload as content
 			JAXBContext jc = JAXBContext.newInstance(CompleteMultipartUpload.class);
@@ -74,8 +71,8 @@ public class AwsMultipartUploader extends HttpTransfer {
 		}
 	}
 
-	public AwsMultipartUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath) {
-		super(cloud, configuration, file, host, remotePath);
+	public AwsMultipartUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath) {
+		super(cloud, configuration, file, host, urlPath);
 
 		// connect to host
 		connect(new InitiateHandler());
@@ -86,7 +83,7 @@ public class AwsMultipartUploader extends HttpTransfer {
 	@Override
 	protected void connect(Part part) {
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadUploadPart.html
-		connect(new UploadHandler(remotePath + "?partNumber=" + (part.index + 1) + "&uploadId=" + id, part) {
+		connect(new UploadHandler(urlPath + "?partNumber=" + (part.index + 1) + "&uploadId=" + id, part) {
 			@Override
 			protected void success(Part part, HttpHeaders headers) {
 				// set state of part to SUCCESS (ETag is id of uploaded part)
@@ -96,7 +93,7 @@ public class AwsMultipartUploader extends HttpTransfer {
 	}
 
 	void initiateDone(InitiateMultipartUploadResult result) throws IOException {
-		System.out.println("initiateDone uploadId " + result.uploadId);
+		//System.out.println("initiateDone uploadId " + result.uploadId);
 
 		startTransfer(this.file.size(), result.uploadId);
 	}
@@ -118,6 +115,6 @@ public class AwsMultipartUploader extends HttpTransfer {
 		// get hash of file in S3 from ETag
 		this.hash = AwsCloud.getHash(result.eTag);
 
-		setState(State.SUCCESS);
+		setSuccess(null);
 	}
 }

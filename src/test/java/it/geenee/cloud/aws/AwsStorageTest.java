@@ -93,6 +93,9 @@ public class AwsStorageTest {
 				case FAILED:
 					System.out.println("FAILED");
 					break loop;
+				case CANCELLED:
+					System.out.println("CANCELLED");
+					break loop;
 			}
 
 			transfer.waitForStateChange();

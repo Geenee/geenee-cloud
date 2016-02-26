@@ -14,11 +14,26 @@ import it.geenee.cloud.http.HttpTransfer;
  */
 public class AwsUploader extends HttpTransfer {
 
+	static HttpTransfer create(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath) {
+		try {
+			long fileSize = file.size();
+			if (fileSize <= configuration.partSize)
+				return new AwsUploader(cloud, configuration, file, fileSize, host, urlPath);
+			else
+				return new AwsMultipartUploader(cloud, configuration, file, host, urlPath);
+		} catch (IOException e) {
+			return new AwsUploader(cloud, configuration, file, host, urlPath, e);
+		}
+	}
 
-	public AwsUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath) throws IOException {
-		super(cloud, configuration, file, host, remotePath);
+	private AwsUploader(HttpCloud cloud, Configuration configuration, FileChannel file, long fileSize, String host, String urlPath) {
+		super(cloud, configuration, file, host, urlPath);
+		startTransfer(fileSize, null);
+	}
 
-		startTransfer(file.size(), null);
+	private AwsUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath, Throwable cause) {
+		super(cloud, configuration, file, host, urlPath);
+		setFailed(cause);
 	}
 
 	// helpers
@@ -26,7 +41,7 @@ public class AwsUploader extends HttpTransfer {
 	@Override
 	protected void connect(Part part) {
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPUT.html
-		connect(new UploadHandler(remotePath, part) {
+		connect(new UploadHandler(urlPath, part) {
 			@Override
 			protected void success(Part part, HttpHeaders headers) {
 				// set state of part to SUCCESS (uploaded part has no id)
@@ -48,6 +63,6 @@ public class AwsUploader extends HttpTransfer {
 
 	@Override
 	protected void completeTransfer() {
-		setState(State.SUCCESS);
+		setSuccess(null);
 	}
 }

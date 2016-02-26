@@ -17,7 +17,7 @@ import it.geenee.cloud.*;
 public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer  {
 
 	protected final FileChannel file;
-	protected final String remotePath;
+	protected final String urlPath;
 
 	// the HTTP ETag of the file in the cloud storage
 	protected String hash = null;
@@ -114,15 +114,15 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 	}
 
 	public abstract class UploadHandler extends HttpTransfer.Handler {
-		final String pathAndQuery;
+		final String urlPath;
 		final Part part;
 
 		static final int CHUNK_SIZE = 8192;
 		boolean uploading = false;
 		long position;
 
-		public UploadHandler(String pathAndQuery, Part part) {
-			this.pathAndQuery = pathAndQuery;
+		public UploadHandler(String urlPath, Part part) {
+			this.urlPath = urlPath;
 			this.part = part;
 		}
 
@@ -141,7 +141,7 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 			// connection is established: send http request to server
 
 			// build http request (without content as we send it on receiving continue 100 status code)
-			HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.PUT, this.pathAndQuery);
+			HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.PUT, this.urlPath);
 			HttpHeaders headers = request.headers();
 			headers.set(HttpHeaders.Names.HOST, host);
 			headers.set(HttpHeaders.Names.EXPECT, HttpHeaders.Values.CONTINUE);
@@ -191,9 +191,8 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 					if (content instanceof LastHttpContent) {
 						ctx.close();
 
-						// check if transfer has failed
-						if (!isRetryCode())
-							cancel();
+						// transfer has failed, maybe retry is possible
+						setFailed(isRetryCode(), new HttpException(this.responseCode));
 					}
 				}
 			}
@@ -250,13 +249,13 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 	}
 
 	abstract class DownloadHandler extends HttpTransfer.Handler {
-		final String pathAndQuery;
+		final String urlPath;
 		final Part part;
 
 		int position;
 
-		DownloadHandler(String pathAndQuery, Part part) {
-			this.pathAndQuery = pathAndQuery;
+		DownloadHandler(String urlPath, Part part) {
+			this.urlPath = urlPath;
 			this.part = part;
 		}
 
@@ -275,7 +274,7 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 			// connection is established
 
 			// generate HTTP request
-			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, this.pathAndQuery);
+			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, this.urlPath);
 			HttpHeaders headers = request.headers();
 			headers.set(HttpHeaders.Names.HOST, host);
 			long begin = this.part.offset;
@@ -325,9 +324,8 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 					if (content instanceof LastHttpContent) {
 						ctx.close();
 
-						// check if transfer has failed
-						if (!isRetryCode())
-							cancel();
+						// transfer has failed, maybe retry is possible
+						setFailed(isRetryCode(), new HttpException(this.responseCode));
 					}
 				}
 			}
@@ -353,13 +351,13 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 	 * @param configuration configuration
 	 * @param file file channel of the file to upload or download. Only read and write with explicit position are used
 	 * @param host host to connect to
-	 * @param remotePath remote path of file
+	 * @param urlPath remote path of file
 	 */
-	public HttpTransfer(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath) {
+	public HttpTransfer(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath) {
 		super(cloud, configuration, host, true);
 
 		this.file = file;
-		this.remotePath = remotePath;
+		this.urlPath = urlPath;
 	}
 
 	@Override
@@ -369,7 +367,7 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 
 	@Override
 	public String getUrl() {
-		return this.host + this.remotePath;
+		return "https://" + this.host + this.urlPath;
 	}
 
 	@Override
