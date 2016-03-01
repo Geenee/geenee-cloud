@@ -5,12 +5,11 @@ import io.netty.util.concurrent.Future;
 import it.geenee.cloud.Compute;
 import it.geenee.cloud.Configuration;
 import it.geenee.cloud.InstanceInfo;
-import it.geenee.cloud.http.AwsGetInstance;
 import it.geenee.cloud.http.HttpCloud;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Unmarshaller;
-import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,10 +27,10 @@ public class AwsCompute implements Compute {
 		this.host = host;
 	}
 
-	// instances
+	// list
 
 	@Override
-	public Instances instances() {
+	public Instances list() {
 		return new Instances() {
 			int index = 1;
 			StringBuilder filters = new StringBuilder();
@@ -69,13 +68,13 @@ public class AwsCompute implements Compute {
 			}
 
 			@Override
-			public Future<List<InstanceInfo>> request() {
+			public Future<List<InstanceInfo>> start() {
 				// http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeInstances.html
 				final String pathAndQuery = "/?Action=DescribeInstances" + this.filters + AwsCloud.EC2_QUERY;
 				final List<InstanceInfo> list = new ArrayList<>();
 				return new AwsRequest<List<InstanceInfo>>(cloud, configuration, host, HttpMethod.GET, pathAndQuery) {
 					@Override
-					protected void success(ByteArrayInputStream content) throws Exception {
+					protected void success(InputStream content) throws Exception {
 						// parse xml
 						JAXBContext jc = JAXBContext.newInstance(DescribeInstancesResponse.class);
 						Unmarshaller unmarshaller = jc.createUnmarshaller();
@@ -125,7 +124,7 @@ public class AwsCompute implements Compute {
 		final Map<String, String> map = new HashMap<>();
 		return new AwsRequest<Map<String, String>>(this.cloud, this.configuration, this.host, HttpMethod.GET, pathAndQuery) {
 			@Override
-			protected void success(ByteArrayInputStream content) throws Exception {
+			protected void success(InputStream content) throws Exception {
 				// parse xml
 				JAXBContext jc = JAXBContext.newInstance(DescribeTagsResponse.class);
 				Unmarshaller unmarshaller = jc.createUnmarshaller();

@@ -5,7 +5,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.*;
 import io.netty.util.concurrent.Future;
 import it.geenee.cloud.*;
-import it.geenee.cloud.http.AwsGetInstance;
 import org.apache.commons.codec.binary.Hex;
 
 import javax.net.ssl.SSLException;
@@ -113,8 +112,8 @@ public class AwsCloud extends HttpCloud {
 	// this instance
 
 	@Override
-	public Future<InstanceInfo> requestInstance() {
-		return new AwsGetInstance(this, configuration);
+	public Future<InstanceInfo> startGetInstance() {
+		return new AwsGetInstance(this);
 	}
 
 	// compute
@@ -323,7 +322,10 @@ public class AwsCloud extends HttpCloud {
 	}
 
 	@Override
-	public String getVersionParameter() {
-		return "versionId";
+	public String addVersion(String urlPath, String version) {
+		if (version == null)
+			return urlPath;
+		return HttpCloud.addQuery(urlPath, "versionId", version);
 	}
+
 }

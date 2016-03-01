@@ -2,7 +2,6 @@ package it.geenee.cloud;
 
 import io.netty.util.concurrent.Future;
 
-import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +16,7 @@ public interface Storage {
 	 * @return hash of file calculated using the same algorithm that the cloud storage uses. May depend on configuration.partSize
 	 * @throws Exception
 	 */
-	String calculateHash(FileChannel file) throws Exception;
+	String hash(FileChannel file) throws Exception;
 
 	/**
 	 * returns the url of the storage extended by the given remote path, e.g. "https://s3.eu-central-1.amazonaws.com/foo/bar"
@@ -50,14 +49,25 @@ public interface Storage {
 	}
 
 	/**
+	 * Get file info for given path
+	 * @param remotePath
+	 * @param version optional version to get info for
+	 * @return file info. The latest flag is always false if a version is given even if the latest version was requested
+	 */
+	Future<FileInfo> startGetInfo(String remotePath, String version);
+	default FileInfo getInfo(String remotePath, String version) throws InterruptedException, ExecutionException {
+		return startGetInfo(remotePath, version).get();
+	}
+
+	/**
 	 * Get a list of all files that have the given remote path as prefix. The result is returned as a map from file path to file hash which is convenient
 	 * for synchronizing a local directory with a remote directory
 	 * @param remotePath
 	 * @return map of file path to file hash
 	 */
-	Future<Map<String, String>> startGetFiles(String remotePath);
-	default Map<String, String> getFiles(String remotePath) throws InterruptedException, ExecutionException {
-		return startGetFiles(remotePath).get();
+	Future<Map<String, String>> startList(String remotePath);
+	default Map<String, String> list(String remotePath) throws InterruptedException, ExecutionException {
+		return startList(remotePath).get();
 	}
 
 	enum ListMode {
@@ -83,9 +93,9 @@ public interface Storage {
 	 * @param mode list mode
 	 * @return list of files
 	 */
-	Future<List<FileInfo>> startGetFiles(String remotePath, ListMode mode);
-	default List<FileInfo> getFiles(String remotePath, ListMode mode) throws InterruptedException, ExecutionException {
-		return startGetFiles(remotePath, mode).get();
+	Future<List<FileInfo>> startList(String remotePath, ListMode mode);
+	default List<FileInfo> list(String remotePath, ListMode mode) throws InterruptedException, ExecutionException {
+		return startList(remotePath, mode).get();
 	}
 
 	/**
@@ -93,20 +103,20 @@ public interface Storage {
 	 * @param remotePath
 	 * @return list of incomplete uploads
 	 */
-	Future<List<UploadInfo>> startGetUploads(String remotePath);
-	default List<UploadInfo> getUploads(String remotePath) throws InterruptedException, ExecutionException {
-		return startGetUploads(remotePath).get();
+	Future<List<UploadInfo>> startListUploads(String remotePath);
+	default List<UploadInfo> listUploads(String remotePath) throws InterruptedException, ExecutionException {
+		return startListUploads(remotePath).get();
 	}
 
 	/**
 	 * Delete a file on the cloud storage
 	 * @param remotePath
-	 * @param version
+	 * @param version optional version to delete
 	 * @return
 	 */
-	Future<Void> startDeleteFile(String remotePath, String version);
-	default void deleteFile(String remotePath, String version) throws InterruptedException, ExecutionException {
-		startDeleteFile(remotePath, version).get();
+	Future<Void> startDelete(String remotePath, String version);
+	default void delete(String remotePath, String version) throws InterruptedException, ExecutionException {
+		startDelete(remotePath, version).get();
 	}
 
 	Future<Void> startDeleteUpload(String remotePath, String uploadId);

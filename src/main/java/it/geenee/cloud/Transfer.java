@@ -159,7 +159,7 @@ public interface Transfer extends Future<Void> {
 	String getVersion();
 
 	/**
-	 * Get the id of the transfer that is needed to continue it. Returns null if none is needed.
+	 * Get the id of the transfer or null if the transfer has no id. For example a multiplart upload has an id to continue or cancel it.
 	 * @return transfer id
 	 */
 	String getId();

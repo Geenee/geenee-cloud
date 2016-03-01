@@ -58,19 +58,13 @@ public abstract class HttpFuture<V> implements Future<V> {
 	/**
 	 * Base class for all http handlers that has retry logic already built in
 	 */
-	protected abstract class Handler extends SimpleChannelInboundHandler<HttpObject> {
-		// http response code
-		protected int responseCode = 0;
+	protected abstract class Handler<I> extends SimpleChannelInboundHandler<I> {
+		protected boolean success = false;
 
 		@Override
 		public boolean isSharable() {
 			// enable adding/removing multiple times, but the handler is used by one pipeline at a time
 			return true;
-		}
-
-		@Override
-		protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
-			// dummy is necessary to prevent compilation error
 		}
 
 		@Override
@@ -97,7 +91,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 		@Override
 		public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-			if (hasFailed()) {
+			if (!this.success) {
 				// remove this handler from pipeline so that it can be reused
 				//ctx.pipeline().remove(this);
 
@@ -114,89 +108,67 @@ public abstract class HttpFuture<V> implements Future<V> {
 		}
 
 		/**
-		 * Returns true if handler has failed
-		 * @return true if failed
-		 */
-		protected abstract boolean hasFailed();
-
-		/**
 		 * Increments the retry count and returns true if failed because maximum retry count has been reached
 		 * @return true if failed because maximum retry count has been reached
 		 */
 		public abstract boolean retry(int maxRetryCount);
 
-		/**
-		 * @return true if the status code indicates failure but a retry makes sense
-		 */
-		public boolean isRetryCode() {
-			return this.responseCode == 400
-					|| this.responseCode == 408
-					|| this.responseCode == 429;
-		}
 	}
 
-	protected abstract class RequestHandler extends Handler {
+	/**
+	 * @return true if the status code indicates failure but a retry makes sense
+	 */
+	public static boolean isRetryCode(int responseCode) {
+		return responseCode == 400
+				|| responseCode == 408
+				|| responseCode == 429;
+	}
+
+	protected abstract class RequestHandler extends Handler<FullHttpResponse> {
 		int retryCount = 0;
 
-		// http content received in response from server
-		byte[] content;
+		@Override
+		public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+			// pipeline gets built
+			ctx.pipeline().addBefore("handler", "aggregator", new HttpObjectAggregator(1000000));
+
+			super.handlerAdded(ctx);
+		}
 
 
 		@Override
 		public void channelActive(ChannelHandlerContext ctx) throws Exception {
-			// connection is established: send http request to server
+			// connection is established: send http start to server
 
-			// build http request with empty content
+			// build http start with empty content
 			FullHttpRequest request = getRequest();
 			HttpHeaders headers = request.headers();
 			headers.set(HttpHeaders.Names.HOST, host);
 			cloud.extendRequest(request, configuration);
 
-			// send the http request
+			// send the http start
 			ctx.writeAndFlush(request);
 
 			super.channelActive(ctx);
 		}
 
 		@Override
-		protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
-			if (msg instanceof HttpResponse) {
-				HttpResponse response = (HttpResponse) msg;
+		protected void channelRead0(ChannelHandlerContext ctx, FullHttpResponse response) throws Exception {
+			// get http response code
+			int responseCode = response.getStatus().code();
 
-				// get http response code
-				this.responseCode = response.getStatus().code();
-			} else if (msg instanceof HttpContent) {
-				HttpContent content = (HttpContent) msg;
+			if (responseCode / 100 == 2) {
+				// success
+				success(response);
+				this.success = true;
 
-				if (this.responseCode / 100 == 2) {
-					// http request succeeded: collect content
-					this.content = HttpCloud.collectContent(this.content, content);
-
-					if (content instanceof LastHttpContent) {
-						success(this.content);
-
-						// mark success
-						this.retryCount = -1;
-
-						ctx.close();
-					}
-				} else {
-					// http error (e.g. 400)
-					//System.err.println(content.content().toString(HttpCloud.UTF_8));
-					if (content instanceof LastHttpContent) {
-						ctx.close();
-
-						// transfer has failed, maybe retry is possible
-						setFailed(isRetryCode(), new HttpException(this.responseCode));
-					}
-				}
+			} else {
+				// http error (e.g. 400)
+				//System.err.println(content.content().toString(HttpCloud.UTF_8));
+				// transfer has failed, maybe retry is possible
+				setFailed(isRetryCode(responseCode), new HttpException(responseCode));
 			}
-		}
-
-		@Override
-		protected boolean hasFailed() {
-			// retryCount is set to -1 after calling success()
-			return this.retryCount != -1;
+			ctx.close();
 		}
 
 		@Override
@@ -205,15 +177,15 @@ public abstract class HttpFuture<V> implements Future<V> {
 		}
 
 		/**
-		 * Gets called when the http request needs to be created
-		 * @return http request with content
+		 * Gets called when the http start needs to be created
+		 * @return http start with content
 		 */
 		abstract protected FullHttpRequest getRequest() throws Exception;
 
 		/**
-		 * Gets called when the http get request was successful
+		 * Gets called when the http get start was successful
 		 */
-		abstract protected void success(byte[] content) throws Exception;
+		abstract protected void success(FullHttpResponse response) throws Exception;
 	}
 
 
@@ -310,7 +282,9 @@ public abstract class HttpFuture<V> implements Future<V> {
 			try {
 				l.operationComplete(this);
 			} catch (Exception e) {
-				// don't know what to do with the exception
+				// set state to FAILED if operationComplete() throws an exception
+				this.state = Transfer.State.FAILED;
+				this.cause = e;
 			}
 		} else {
 			// add listener to listener list
@@ -447,7 +421,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 		return this.state;
 	}
 
-	protected void connect(final Handler handler) {
+	public void connect(final Handler handler) {
 		int timeout = this.configuration.timeout;
 
 		// create channel
@@ -491,7 +465,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 			pipeline.addLast("decompressor", new HttpContentDecompressor());
 
 			// our handler for HTTP messages
-			pipeline.addLast("transfer", handler);
+			pipeline.addLast("handler", handler);
 		}
 
 		// add channel to set of active channels
@@ -602,17 +576,19 @@ public abstract class HttpFuture<V> implements Future<V> {
 		// set state
 		this.state = state;
 
-		// notify all waiting threads
-		notifyAll();
-
 		// notify listeners
 		for (GenericFutureListener<HttpFuture<V>> listener : listeners) {
 			try {
 				listener.operationComplete(this);
 			} catch (Exception e) {
-				// TODO don't know what to do with the exception here because we already in done state
+				// set state to FAILED if operationComplete() throws an exception
+				this.state = Transfer.State.FAILED;
+				this.cause = e;
 			}
 		}
+
+		// notify all waiting threads
+		notifyAll();
 	}
 
 	protected synchronized void stateChange() {

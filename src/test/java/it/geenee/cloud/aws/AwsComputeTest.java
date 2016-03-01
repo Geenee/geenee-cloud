@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import it.geenee.cloud.http.HttpFuture;
 import org.junit.Test;
 import org.junit.Assert;
 
@@ -20,7 +21,7 @@ public class AwsComputeTest {
 		//HttpFuture.HTTP_PORT = 8080;
 		//AwsGetInstance.HOST = "localhost";
 
-		Cloud cloud = new AwsCloud(Cloud.configure().timeout(1).build());
+		Cloud cloud = new AwsCloud(Cloud.configure().timeout(5).build());
 
 		try {
 			InstanceInfo instanceInfo = cloud.getInstance();
@@ -47,11 +48,11 @@ public class AwsComputeTest {
 
 		List<InstanceInfo> instanceInfos;
 
-		instanceInfos = compute.instances().filterTagKey("Role").filterTagValue("master", "foo bar").filterTag("Group", "production").get();
+		instanceInfos = compute.list().filterTagKey("Role").filterTagValue("master", "foo bar").filterTag("Group", "production").get();
 		Assert.assertEquals(1, instanceInfos.size());
 		System.out.println(instanceInfos.toString());
 
-		instanceInfos = compute.instances().filterTag("Role", "master").filterTag("Group", "production").get();
+		instanceInfos = compute.list().filterTag("Role", "master").filterTag("Group", "production").get();
 		Assert.assertEquals(1, instanceInfos.size());
 		System.out.println(instanceInfos.toString());
 	}

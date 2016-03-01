@@ -1,6 +1,6 @@
 package it.geenee.cloud.aws;
 
-import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.*;
 import io.netty.util.concurrent.Future;
 import it.geenee.cloud.*;
 import it.geenee.cloud.http.HttpCloud;
@@ -9,20 +9,19 @@ import org.apache.commons.codec.binary.Hex;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Unmarshaller;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 
 public class AwsStorage implements Storage {
 	final AwsCloud cloud;
 	final Configuration configuration;
 	final String host;
+	static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 
 	AwsStorage(AwsCloud cloud, Configuration configuration, String host) {
 		this.cloud = cloud;
@@ -41,7 +40,7 @@ public class AwsStorage implements Storage {
 	 * @throws Exception
 	 */
 	@Override
-	public String calculateHash(FileChannel file) throws Exception {
+	public String hash(FileChannel file) throws Exception {
 		long fileLength = file.size();
 		long partSize = this.configuration.partSize;
 		long partCount = (fileLength + partSize - 1) / partSize;
@@ -88,12 +87,17 @@ public class AwsStorage implements Storage {
 	}
 
 	@Override
-	public Future<Map<String, String>> startGetFiles(final String remotePath) {
+	public Future<FileInfo> startGetInfo(String remotePath, String version) {
+		return new AwsGetFileInfo(this.cloud, this.configuration, this.host, remotePath, version);
+	}
+
+	@Override
+	public Future<Map<String, String>> startList(final String remotePath) {
 		final String urlPath = encodePathPrefix(remotePath);
 		final Map<String, String> map = new HashMap<>();
 		return new AwsRequest<Map<String, String>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
 			@Override
-			protected void success(ByteArrayInputStream content) throws Exception {
+			protected void success(InputStream content) throws Exception {
 				// parse xml
 				JAXBContext jc = JAXBContext.newInstance(ListBucketResult.class);
 				Unmarshaller unmarshaller = jc.createUnmarshaller();
@@ -118,14 +122,14 @@ public class AwsStorage implements Storage {
 	}
 
 	@Override
-	public Future<List<FileInfo>> startGetFiles(final String remotePath, final ListMode mode) {
+	public Future<List<FileInfo>> startList(final String remotePath, final ListMode mode) {
 		final List<FileInfo> list = new ArrayList<>();
 		if (mode == ListMode.UNVERSIONED) {
 			// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html
 			final String urlPath = encodePathPrefix(remotePath);
 			return new AwsRequest<List<FileInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
 				@Override
-				protected void success(ByteArrayInputStream content) throws Exception {
+				protected void success(InputStream content) throws Exception {
 					// parse xml
 					JAXBContext jc = JAXBContext.newInstance(ListBucketResult.class);
 					Unmarshaller unmarshaller = jc.createUnmarshaller();
@@ -138,7 +142,7 @@ public class AwsStorage implements Storage {
 									getPath(entry.key, remotePath),
 									AwsCloud.getHash(entry.eTag),
 									entry.size,
-									entry.lastModified,
+									DATE_FORMAT.parse(entry.lastModified),
 									null,
 									true));
 						}
@@ -158,7 +162,7 @@ public class AwsStorage implements Storage {
 			final String urlPath = HttpCloud.addQuery(encodePathPrefix(remotePath), "versions");
 			return new AwsRequest<List<FileInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
 				@Override
-				protected void success(ByteArrayInputStream content) throws Exception {
+				protected void success(InputStream content) throws Exception {
 					// parse xml
 					JAXBContext jc = JAXBContext.newInstance(ListVersionsResult.class);
 					Unmarshaller unmarshaller = jc.createUnmarshaller();
@@ -172,7 +176,7 @@ public class AwsStorage implements Storage {
 										getPath(version.key, remotePath),
 										AwsCloud.getHash(version.eTag),
 										version.size,
-										version.lastModified,
+										DATE_FORMAT.parse(version.lastModified),
 										version.versionId,
 										version.isLatest));
 							}
@@ -185,7 +189,7 @@ public class AwsStorage implements Storage {
 										getPath(deleteMarker.key, remotePath),
 										null,
 										0,
-										deleteMarker.lastModified,
+										DATE_FORMAT.parse(deleteMarker.lastModified),
 										deleteMarker.versionId,
 										deleteMarker.isLatest));
 							}
@@ -207,13 +211,13 @@ public class AwsStorage implements Storage {
 	}
 
 	@Override
-	public Future<List<UploadInfo>> startGetUploads(final String remotePath) {
+	public Future<List<UploadInfo>> startListUploads(final String remotePath) {
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadListMPUpload.html
 		final String urlPath = HttpCloud.addQuery(encodePathPrefix(remotePath), "uploads");
 		final List<UploadInfo> list = new ArrayList<>();
 		return new AwsRequest<List<UploadInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
 			@Override
-			protected void success(ByteArrayInputStream content) throws Exception {
+			protected void success(InputStream content) throws Exception {
 				// parse xml
 				JAXBContext jc = JAXBContext.newInstance(ListMultipartUploadsResult.class);
 				Unmarshaller unmarshaller = jc.createUnmarshaller();
@@ -244,15 +248,13 @@ public class AwsStorage implements Storage {
 	}
 
 	@Override
-	public Future<Void> startDeleteFile(String remotePath, String version) {
+	public Future<Void> startDelete(String remotePath, String version) {
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-		String urlPath = encodePath(remotePath);
-		if (version != null)
-			urlPath = HttpCloud.addQuery(urlPath, "versionId");
+		String urlPathAndVersion = this.cloud.addVersion(HttpCloud.encodePath('/' + this.configuration.prefix + remotePath), version);
 
-		return new AwsRequest<Void>(this.cloud, this.configuration, this.host, HttpMethod.DELETE, urlPath) {
+		return new AwsRequest<Void>(this.cloud, this.configuration, this.host, HttpMethod.DELETE, urlPathAndVersion) {
 			@Override
-			protected void success(ByteArrayInputStream content) throws Exception {
+			protected void success(InputStream content) throws Exception {
 				setSuccess(null);
 			}
 		};
@@ -261,25 +263,17 @@ public class AwsStorage implements Storage {
 	@Override
 	public Future<Void> startDeleteUpload(String remotePath, String uploadId) {
 		// http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadAbort.html
-		String pathAndQuery = HttpCloud.addQuery(encodePath(remotePath), "uploadId", uploadId);
+		String urlPath = HttpCloud.addQuery(HttpCloud.encodePath('/' + this.configuration.prefix + remotePath), "uploadId", uploadId);
 
-		return new AwsRequest<Void>(this.cloud, this.configuration, this.host, HttpMethod.DELETE, pathAndQuery) {
+		return new AwsRequest<Void>(this.cloud, this.configuration, this.host, HttpMethod.DELETE, urlPath) {
 			@Override
-			protected void success(ByteArrayInputStream content) throws Exception {
+			protected void success(InputStream content) throws Exception {
 				setSuccess(null);
 			}
 		};
 	}
 
 	// helpers
-
-	String encodePath(String remotePath) {
-		StringBuilder path = new StringBuilder();
-		path.append('/');
-		path.append(this.configuration.prefix);
-		path.append(remotePath);
-		return HttpCloud.encodePath(path.toString());
-	}
 
 	String encodePathPrefix(String remotePath) {
 		if (!this.configuration.prefix.isEmpty())

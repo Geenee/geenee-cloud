@@ -1,9 +1,10 @@
-package it.geenee.cloud.http;
+package it.geenee.cloud.aws;
 
-import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
 
 import it.geenee.cloud.*;
+import it.geenee.cloud.http.HttpCloud;
+import it.geenee.cloud.http.HttpFuture;
 
 /**
  * AWS get instance data of the instance we are currently running on
@@ -17,81 +18,28 @@ public class AwsGetInstance extends HttpFuture<InstanceInfo> {
 	String instanceId = null;
 	String zone = null;
 
-	// channel handler to upload file via PUT
-	class GetHandler extends HttpFuture.Handler {
+	class GetHandler extends RequestHandler {
 		String path;
-
-		int retryCount = 0;
-
-		// http content received in response from server
-		byte[] content;
-
 
 		GetHandler(String path) {
 			this.path = path;
 		}
 
 		@Override
-		public void channelActive(ChannelHandlerContext ctx) throws Exception {
-			// connection is established: send http request to server
-
-			// build http request (without content as we send it on receiving continue 100 status code)
-			FullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, this.path);
-			HttpHeaders headers = request.headers();
-			headers.set(HttpHeaders.Names.HOST, host);
-
-			// send the http request
-			ctx.writeAndFlush(request);
-
-			super.channelActive(ctx);
+		protected FullHttpRequest getRequest() throws Exception {
+			return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, this.path);
 		}
 
 		@Override
-		protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
-			if (msg instanceof HttpResponse) {
-				HttpResponse response = (HttpResponse) msg;
-
-				// get http response code
-				this.responseCode = response.getStatus().code();
-			} else if (msg instanceof HttpContent) {
-				HttpContent content = (HttpContent) msg;
-
-				if (this.responseCode / 100 == 2) {
-					// http request succeeded: collect content
-					this.content = HttpCloud.collectContent(this.content, content);
-
-					if (content instanceof LastHttpContent) {
-						done(this.path, new String(this.content, HttpCloud.UTF_8));
-
-						ctx.close();
-					}
-				} else {
-					// http error (e.g. 400)
-					//System.err.println(content.content().toString(HttpCloud.UTF_8));
-					if (content instanceof LastHttpContent) {
-						ctx.close();
-
-						// transfer has failed, maybe retry is possible
-						setFailed(isRetryCode(), new HttpException(this.responseCode));
-					}
-				}
-			}
-		}
-
-		@Override
-		protected boolean hasFailed() {
-			// if state is not success (e.g. on read timeout), describe tags has failed
-			return !isSuccess();
-		}
-
-		@Override
-		public boolean retry(int maxRetryCount) {
-			return ++this.retryCount >= maxRetryCount;
+		protected void success(FullHttpResponse response) throws Exception {
+			done(this.path, response.content().toString(HttpCloud.UTF_8));
 		}
 	}
 
-	public AwsGetInstance(HttpCloud cloud, Configuration configuration) {
-		super(cloud, configuration, HOST, false); // use http
+
+	public AwsGetInstance(HttpCloud cloud) {
+		// use default configuration because an aws internal http server asked and no credentials are needed
+		super(cloud, AwsCloud.DEFAULT_CONFIGURATION, HOST, false); // use http
 
 		connect(new GetHandler(INSTANCE_ID));
 		connect(new GetHandler(ZONE));

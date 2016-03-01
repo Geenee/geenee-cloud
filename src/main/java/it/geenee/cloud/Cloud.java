@@ -99,9 +99,9 @@ public interface Cloud {
 	/**
 	 * Get instance data of the instance we are currently running on
 	 */
-	Future<InstanceInfo> requestInstance();
+	Future<InstanceInfo> startGetInstance();
 	default InstanceInfo getInstance() throws InterruptedException, ExecutionException {
-		return requestInstance().get();
+		return startGetInstance().get();
 	}
 
 	// compute

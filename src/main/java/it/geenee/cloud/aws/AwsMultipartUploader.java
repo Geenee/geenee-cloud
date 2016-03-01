@@ -3,6 +3,7 @@ package it.geenee.cloud.aws;
 import java.io.*;
 import java.nio.channels.FileChannel;
 
+import io.netty.buffer.ByteBufInputStream;
 import io.netty.handler.codec.http.*;
 
 import it.geenee.cloud.*;
@@ -26,11 +27,11 @@ public class AwsMultipartUploader extends HttpTransfer {
 		}
 
 		@Override
-		protected void success(byte[] content) throws Exception {
+		protected void success(FullHttpResponse response) throws Exception {
 			// parse xml
 			JAXBContext jc = JAXBContext.newInstance(InitiateMultipartUploadResult.class);
 			Unmarshaller unmarshaller = jc.createUnmarshaller();
-			InitiateMultipartUploadResult result = (InitiateMultipartUploadResult) unmarshaller.unmarshal(new ByteArrayInputStream(content));
+			InitiateMultipartUploadResult result = (InitiateMultipartUploadResult) unmarshaller.unmarshal(new ByteBufInputStream(response.content()));
 
 			// initate done, start upload
 			initiateDone(result);
@@ -60,11 +61,14 @@ public class AwsMultipartUploader extends HttpTransfer {
 		}
 
 		@Override
-		protected void success(byte[] content) throws Exception {
+		protected void success(FullHttpResponse response) throws Exception {
+			// get version of newly created file in s3
+			version = cloud.getVersion(response.headers());
+
 			// parse xml
 			JAXBContext jc = JAXBContext.newInstance(CompleteMultipartUploadResult.class);
 			Unmarshaller unmarshaller = jc.createUnmarshaller();
-			CompleteMultipartUploadResult result = (CompleteMultipartUploadResult) unmarshaller.unmarshal(new ByteArrayInputStream(content));
+			CompleteMultipartUploadResult result = (CompleteMultipartUploadResult) unmarshaller.unmarshal(new ByteBufInputStream(response.content()));
 
 			// complete done, transfer was successful
 			completeDone(result);

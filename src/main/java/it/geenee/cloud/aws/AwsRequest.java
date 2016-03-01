@@ -2,10 +2,8 @@ package it.geenee.cloud.aws;
 
 import java.io.*;
 
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpVersion;
+import io.netty.buffer.ByteBufInputStream;
+import io.netty.handler.codec.http.*;
 import it.geenee.cloud.*;
 import it.geenee.cloud.http.HttpCloud;
 import it.geenee.cloud.http.HttpFuture;
@@ -17,30 +15,29 @@ abstract public class AwsRequest<V> extends HttpFuture<V> {
 
 	class ListHandler extends RequestHandler {
 		HttpMethod method;
-		String pathAndQuery;
+		String urlPath;
 
-		ListHandler(HttpMethod method, String pathAndQuery) {
-			//super(method, pathAndQuery);
+		ListHandler(HttpMethod method, String urlPath) {
 			this.method = method;
-			this.pathAndQuery = pathAndQuery;
+			this.urlPath = urlPath;
 		}
 
 		@Override
 		protected FullHttpRequest getRequest() throws Exception {
-			return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, this.method, this.pathAndQuery);
+			return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, this.method, this.urlPath);
 		}
 
 		@Override
-		protected void success(byte[] content) throws Exception {
-			//System.out.println(new String(content, HttpCloud.UTF_8));
-			AwsRequest.this.success(new ByteArrayInputStream(content));
+		protected void success(FullHttpResponse response) throws Exception {
+			//System.out.println(response.content().toString(HttpCloud.UTF_8));
+			AwsRequest.this.success(new ByteBufInputStream(response.content()));
 		}
 	}
 
-	public AwsRequest(HttpCloud cloud, Configuration configuration, String host, HttpMethod method, String pathAndQuery) {
+	public AwsRequest(HttpCloud cloud, Configuration configuration, String host, HttpMethod method, String urlPath) {
 		super(cloud, configuration, host, true);
-		connect(new ListHandler(method, pathAndQuery));
+		connect(new ListHandler(method, urlPath));
 	}
 
-	protected abstract void success(ByteArrayInputStream content) throws Exception;
+	protected abstract void success(InputStream content) throws Exception;
 }

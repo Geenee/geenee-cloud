@@ -113,11 +113,12 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 		}
 	}
 
-	public abstract class UploadHandler extends HttpTransfer.Handler {
+	public abstract class UploadHandler extends HttpTransfer.Handler<HttpObject> {
 		final String urlPath;
 		final Part part;
 
 		static final int CHUNK_SIZE = 8192;
+		int responseCode;
 		boolean uploading = false;
 		long position;
 
@@ -171,6 +172,7 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 				} else if (this.responseCode / 100 == 2) {
 					// success
 					success(this.part, response.headers());
+					this.success = true;
 
 					// part done, start next part or complete upload if no more parts
 					startPart();
@@ -192,7 +194,7 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 						ctx.close();
 
 						// transfer has failed, maybe retry is possible
-						setFailed(isRetryCode(), new HttpException(this.responseCode));
+						setFailed(isRetryCode(this.responseCode), new HttpException(this.responseCode));
 					}
 				}
 			}
@@ -237,21 +239,16 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 		}
 
 		@Override
-		protected boolean hasFailed() {
-			// if state of part is not done (e.g. on read timeout), upload of part has failed
-			return this.part.getState() != Part.State.SUCCESS;
-		}
-
-		@Override
 		public boolean retry(int maxRetryCount) {
 			return this.part.retry(maxRetryCount);
 		}
 	}
 
-	abstract class DownloadHandler extends HttpTransfer.Handler {
+	abstract class DownloadHandler extends HttpTransfer.Handler<HttpObject> {
 		final String urlPath;
 		final Part part;
 
+		int responseCode;
 		int position;
 
 		DownloadHandler(String urlPath, Part part) {
@@ -312,6 +309,7 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 					if (content instanceof LastHttpContent) {
 						// success
 						success(this.part);
+						this.success = true;
 
 						// part done, start next part or complete upload if no more parts
 						startPart();
@@ -325,19 +323,13 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 						ctx.close();
 
 						// transfer has failed, maybe retry is possible
-						setFailed(isRetryCode(), new HttpException(this.responseCode));
+						setFailed(isRetryCode(this.responseCode), new HttpException(this.responseCode));
 					}
 				}
 			}
 		}
 
 		protected abstract void success(Part part);
-
-		@Override
-		protected boolean hasFailed() {
-			// if state of part is not done (e.g. on read timeout), download of part has failed
-			return this.part.getState() != Part.State.SUCCESS;
-		}
 
 		@Override
 		public boolean retry(int maxRetryCount) {

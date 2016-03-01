@@ -13,7 +13,7 @@ public interface Compute {
 	interface Instances {
 		/**
 		 * Filter instances. Instances pass the filter if they have the given key set to one of the given values.
-		 * The key is cloud provider specific, use one of the following methods to be provider independent.
+		 * The key is cloud provider specific, use one of the specific methods to be provider independent.
 		 * AWS: http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeInstances.html
 		 * @param key
 		 * @param values
@@ -26,18 +26,18 @@ public interface Compute {
 		Instances filterTagKey(String... keys);
 		Instances filterTagValue(String... values);
 
-		Future<List<InstanceInfo>> request();
+		Future<List<InstanceInfo>> start();
 		default List<InstanceInfo> get() throws InterruptedException, ExecutionException {
-			return request().get();
+			return start().get();
 		}
 	}
 
 	/**
 	 * Returns an object for retrieving info about instances. You can add filters to list only specific intances.
-	 * For example use like this: compute.instances().filterZone("eu-central-1a").filterTag("Role", "master").get();
+	 * For example use like this: compute.list().filterZone("eu-central-1a").filterTag("Role", "master").get();
 	 * @return instance lister object
 	 */
-	Instances instances();
+	Instances list();
 
 	// tags
 

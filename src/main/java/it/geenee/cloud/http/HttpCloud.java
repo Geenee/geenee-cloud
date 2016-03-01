@@ -173,10 +173,11 @@ public abstract class HttpCloud implements Cloud {
 	public abstract String getVersion(HttpHeaders headers);
 
 	/**
-	 * Get version parameter that is used to request a specific version
-	 * @return version parameter
+	 * Add version parameter to given path part of an url
+	 * @param urlPath path (and query) part of url to extend, e.g. "/foo/bar"
+	 * @return path and query part of url extended by version parameter, e.g. "/foo/bar?versionId=12345"
 	 */
-	public abstract String getVersionParameter();
+	public abstract String addVersion(String urlPath, String version);
 
 	static final char[] hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 

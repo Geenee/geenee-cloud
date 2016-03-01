@@ -22,7 +22,7 @@ public class AwsStorageTest {
 	File smallFilePath = new File("small test file");
 	int smallFileSize = 1000000;
 	File largeFilePath = new File("large test file");
-	int largeFileSize = (AwsCloud.DEFAULT_CONFIGURATION.partSize * 3) / 2; // 2.5 parts
+	int largeFileSize = (AwsCloud.DEFAULT_CONFIGURATION.partSize * 5) / 2; // 2.5 parts
 
 	Storage storage;
 	Storage prefixedStorage;
@@ -109,7 +109,19 @@ public class AwsStorageTest {
 			wait(uploader);
 
 			// compare hash of local file with the hash (etag) returned by aws
-			Assert.assertEquals(uploader.getHash(), this.storage.calculateHash(file.getChannel()));
+			Assert.assertEquals(uploader.getHash(), this.storage.hash(file.getChannel()));
+
+			// get file info and compare
+			FileInfo fileInfo = this.storage.getInfo(remotePath, null);
+			Assert.assertEquals(uploader.getHash(), fileInfo.hash);
+			Assert.assertEquals(file.getChannel().size(), fileInfo.size);
+			Assert.assertEquals(uploader.getVersion(), fileInfo.version);
+
+			// get file info for version and compare again
+			fileInfo = this.storage.getInfo(remotePath, uploader.getVersion());
+			Assert.assertEquals(uploader.getHash(), fileInfo.hash);
+			Assert.assertEquals(file.getChannel().size(), fileInfo.size);
+			Assert.assertEquals(uploader.getVersion(), fileInfo.version);
 		}
 	}
 
@@ -120,7 +132,7 @@ public class AwsStorageTest {
 			wait(downloader);
 
 			// compare hash of local file with the hash (etag) returned by aws
-			Assert.assertEquals(downloader.getHash(), this.storage.calculateHash(file.getChannel()));
+			Assert.assertEquals(downloader.getHash(), this.storage.hash(file.getChannel()));
 		}
 	}
 
@@ -140,10 +152,10 @@ public class AwsStorageTest {
 		testDownload(path, remotePath);
 
 		// delete remote file
-		this.storage.deleteFile(remotePath, null);
+		this.storage.delete(remotePath, null);
 
 		// check if remote file is gone
-		Assert.assertTrue(this.storage.getFiles(remotePath).isEmpty());
+		Assert.assertTrue(this.storage.list(remotePath).isEmpty());
 	}
 
 	@Test
@@ -155,7 +167,7 @@ public class AwsStorageTest {
 	@Test
 	public void testGetAndDeleteUploads() throws Exception {
 		// get list of incomplete uploads
-		List<UploadInfo> uploadInfos = this.storage.getUploads(bucket);
+		List<UploadInfo> uploadInfos = this.storage.listUploads(bucket);
 
 		for (UploadInfo uploadInfo : uploadInfos) {
 			System.out.println(uploadInfo.toString());
@@ -167,11 +179,11 @@ public class AwsStorageTest {
 
 	@Test
 	public void testGetFiles() throws Exception {
-		Map<String, String> fileMap = this.storage.getFiles(bucket);
+		Map<String, String> fileMap = this.storage.list(bucket);
 		System.out.println(fileMap);
 
-		List<FileInfo> fileInfos = this.storage.getFiles(bucket, Storage.ListMode.VERSIONED_DELETED_ALL);
-		List<FileInfo> prefixedFileInfos = this.prefixedStorage.getFiles("", Storage.ListMode.VERSIONED_DELETED_ALL);
+		List<FileInfo> fileInfos = this.storage.list(bucket, Storage.ListMode.VERSIONED_DELETED_ALL);
+		List<FileInfo> prefixedFileInfos = this.prefixedStorage.list("", Storage.ListMode.VERSIONED_DELETED_ALL);
 
 		for (FileInfo fileInfo : fileInfos) {
 			System.out.println(fileInfo.toString());
