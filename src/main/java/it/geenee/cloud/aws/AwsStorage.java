@@ -92,10 +92,11 @@ public class AwsStorage implements Storage {
 	}
 
 	@Override
-	public Future<Map<String, String>> startList(final String remotePath) {
+	public Future<String[]> startList(final String remotePath) {
 		final String urlPath = encodePathPrefix(remotePath);
-		final Map<String, String> map = new HashMap<>();
-		return new AwsRequest<Map<String, String>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
+		return new AwsRequest<String[]>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
+			String[] list = new String[0];
+
 			@Override
 			protected void success(InputStream content) throws Exception {
 				// parse xml
@@ -105,29 +106,32 @@ public class AwsStorage implements Storage {
 
 				// copy file entries to map
 				if (result.contents != null) {
+					int i = this.list.length;
+					this.list = Arrays.copyOf(this.list, i + result.contents.size());
 					for (ListBucketResult.Entry entry : result.contents) {
-						map.put(getPath(entry.key, remotePath), AwsCloud.getHash(entry.eTag));
+						this.list[i++] = getPath(entry.key, remotePath);
 					}
 				}
 
 				// either repeat or finished
-				if (result.isTruncated) {
+				if (result.isTruncated && result.contents != null) {
 					String marker = result.contents.get(result.contents.size()-1).key;
 					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker)));
 				} else {
-					setSuccess(map);
+					setSuccess(this.list);
 				}
 			}
 		};
 	}
 
 	@Override
-	public Future<List<FileInfo>> startList(final String remotePath, final ListMode mode) {
-		final List<FileInfo> list = new ArrayList<>();
+	public Future<FileInfo[]> startList(final String remotePath, final ListMode mode) {
 		if (mode == ListMode.UNVERSIONED) {
 			// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html
 			final String urlPath = encodePathPrefix(remotePath);
-			return new AwsRequest<List<FileInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
+			return new AwsRequest<FileInfo[]>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
+				FileInfo[] list = new FileInfo[0];
+
 				@Override
 				protected void success(InputStream content) throws Exception {
 					// parse xml
@@ -137,30 +141,34 @@ public class AwsStorage implements Storage {
 
 					// copy file entries to list
 					if (result.contents != null) {
+						int i = this.list.length;
+						this.list = Arrays.copyOf(this.list, i + result.contents.size());
 						for (ListBucketResult.Entry entry : result.contents) {
-							list.add(new FileInfo(
+							this.list[i++] = new FileInfo(
 									getPath(entry.key, remotePath),
 									AwsCloud.getHash(entry.eTag),
 									entry.size,
 									DATE_FORMAT.parse(entry.lastModified),
 									null,
-									true));
+									true);
 						}
 					}
 
 					// either repeat or finished
-					if (result.isTruncated) {
+					if (result.isTruncated && result.contents != null) {
 						String marker = result.contents.get(result.contents.size() - 1).key;
 						connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker)));
 					} else {
-						setSuccess(list);
+						setSuccess(this.list);
 					}
 				}
 			};
 		} else {
 			// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGETVersion.html
 			final String urlPath = HttpCloud.addQuery(encodePathPrefix(remotePath), "versions");
-			return new AwsRequest<List<FileInfo>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
+			return new AwsRequest<FileInfo[]>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
+				FileInfo[] list = new FileInfo[0];
+
 				@Override
 				protected void success(InputStream content) throws Exception {
 					// parse xml
@@ -168,30 +176,51 @@ public class AwsStorage implements Storage {
 					Unmarshaller unmarshaller = jc.createUnmarshaller();
 					ListVersionsResult result = (ListVersionsResult) unmarshaller.unmarshal(content);
 
-					// copy file entries to list
+					// count number of new entries
+					int count = 0;
 					if (result.versions != null) {
 						for (ListVersionsResult.Version version : result.versions) {
 							if (version.isLatest || mode == ListMode.VERSIONED_ALL || mode == ListMode.VERSIONED_DELETED_ALL) {
-								list.add(new FileInfo(
-										getPath(version.key, remotePath),
-										AwsCloud.getHash(version.eTag),
-										version.size,
-										DATE_FORMAT.parse(version.lastModified),
-										version.versionId,
-										version.isLatest));
+								++count;
 							}
 						}
 					}
 					if (result.deleteMarkers != null && (mode == ListMode.VERSIONED_DELETEED_LATEST || mode == ListMode.VERSIONED_DELETED_ALL)) {
 						for (ListVersionsResult.DeleteMarker deleteMarker : result.deleteMarkers) {
 							if (deleteMarker.isLatest || mode == ListMode.VERSIONED_DELETED_ALL) {
-								list.add(new FileInfo(
+								++count;
+							}
+						}
+					}
+
+					// resize array
+					int i = this.list.length;
+					this.list = Arrays.copyOf(this.list, i + count);
+
+					// copy file entries to list
+					if (result.versions != null) {
+						for (ListVersionsResult.Version version : result.versions) {
+							if (version.isLatest || mode == ListMode.VERSIONED_ALL || mode == ListMode.VERSIONED_DELETED_ALL) {
+								this.list[i++] = new FileInfo(
+										getPath(version.key, remotePath),
+										AwsCloud.getHash(version.eTag),
+										version.size,
+										DATE_FORMAT.parse(version.lastModified),
+										version.versionId,
+										version.isLatest);
+							}
+						}
+					}
+					if (result.deleteMarkers != null && (mode == ListMode.VERSIONED_DELETEED_LATEST || mode == ListMode.VERSIONED_DELETED_ALL)) {
+						for (ListVersionsResult.DeleteMarker deleteMarker : result.deleteMarkers) {
+							if (deleteMarker.isLatest || mode == ListMode.VERSIONED_DELETED_ALL) {
+								this.list[i++] = new FileInfo(
 										getPath(deleteMarker.key, remotePath),
 										null,
 										0,
 										DATE_FORMAT.parse(deleteMarker.lastModified),
 										deleteMarker.versionId,
-										deleteMarker.isLatest));
+										deleteMarker.isLatest);
 							}
 						}
 					}
@@ -208,6 +237,37 @@ public class AwsStorage implements Storage {
 				}
 			};
 		}
+	}
+
+	@Override
+	public Future<Map<String, String>> startListHashes(final String remotePath) {
+		final String urlPath = encodePathPrefix(remotePath);
+		return new AwsRequest<Map<String, String>>(this.cloud, this.configuration, this.host, HttpMethod.GET, urlPath) {
+			final Map<String, String> map = new HashMap<>();
+
+			@Override
+			protected void success(InputStream content) throws Exception {
+				// parse xml
+				JAXBContext jc = JAXBContext.newInstance(ListBucketResult.class);
+				Unmarshaller unmarshaller = jc.createUnmarshaller();
+				ListBucketResult result = (ListBucketResult) unmarshaller.unmarshal(content);
+
+				// copy file entries to map
+				if (result.contents != null) {
+					for (ListBucketResult.Entry entry : result.contents) {
+						this.map.put(getPath(entry.key, remotePath), AwsCloud.getHash(entry.eTag));
+					}
+				}
+
+				// either repeat or finished
+				if (result.isTruncated) {
+					String marker = result.contents.get(result.contents.size()-1).key;
+					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker)));
+				} else {
+					setSuccess(this.map);
+				}
+			}
+		};
 	}
 
 	@Override

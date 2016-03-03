@@ -60,14 +60,13 @@ public interface Storage {
 	}
 
 	/**
-	 * Get a list of all files that have the given remote path as prefix. The result is returned as a map from file path to file hash which is convenient
-	 * for synchronizing a local directory with a remote directory
+	 * Request a list of all files that have the given remote path as prefix
 	 * @param remotePath
-	 * @return map of file path to file hash
+	 * @return list of file paths
 	 */
-	Future<Map<String, String>> startList(String remotePath);
-	default Map<String, String> list(String remotePath) throws InterruptedException, ExecutionException {
-		return startList(remotePath).get();
+	Future<String[]> startList(String remotePath);
+	default String[] list(String remotePath) throws InterruptedException, ExecutionException {
+		return this.startList(remotePath).get();
 	}
 
 	enum ListMode {
@@ -90,12 +89,23 @@ public interface Storage {
 	/**
 	 * Request a list of all files that have the given remote path as prefix
 	 * @param remotePath
-	 * @param mode list mode
-	 * @return list of files
+	 * @param mode list mode, one member of ListMode enum
+	 * @return list of file infos
 	 */
-	Future<List<FileInfo>> startList(String remotePath, ListMode mode);
-	default List<FileInfo> list(String remotePath, ListMode mode) throws InterruptedException, ExecutionException {
-		return startList(remotePath, mode).get();
+	Future<FileInfo[]> startList(String remotePath, ListMode mode);
+	default FileInfo[] list(String remotePath, ListMode mode) throws InterruptedException, ExecutionException {
+		return this.startList(remotePath, mode).get();
+	}
+
+	/**
+	 * Get a list of all files that have the given remote path as prefix. The result is returned as a map from file path to file hash which is convenient
+	 * for synchronizing a local directory with a remote directory
+	 * @param remotePath
+	 * @return map of file path to file hash
+	 */
+	Future<Map<String, String>> startListHashes(String remotePath);
+	default Map<String, String> listHashes(String remotePath) throws InterruptedException, ExecutionException {
+		return startListHashes(remotePath).get();
 	}
 
 	/**

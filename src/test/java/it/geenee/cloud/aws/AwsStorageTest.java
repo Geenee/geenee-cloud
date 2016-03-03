@@ -155,7 +155,7 @@ public class AwsStorageTest {
 		this.storage.delete(remotePath, null);
 
 		// check if remote file is gone
-		Assert.assertTrue(this.storage.list(remotePath).isEmpty());
+		Assert.assertTrue(this.storage.listHashes(remotePath).isEmpty());
 	}
 
 	@Test
@@ -178,21 +178,44 @@ public class AwsStorageTest {
 	}
 
 	@Test
-	public void testGetFiles() throws Exception {
-		Map<String, String> fileMap = this.storage.list(bucket);
-		System.out.println(fileMap);
+	public void testList() throws Exception {
 
-		List<FileInfo> fileInfos = this.storage.list(bucket, Storage.ListMode.VERSIONED_DELETED_ALL);
-		List<FileInfo> prefixedFileInfos = this.prefixedStorage.list("", Storage.ListMode.VERSIONED_DELETED_ALL);
+		// compare file listing obtained with different methods
+		FileInfo[] fileInfos = this.storage.list(bucket, Storage.ListMode.VERSIONED_LATEST);
+		String[] prefixedFileInfos = this.prefixedStorage.list("");
+		Map<String, String> fileMap = this.storage.listHashes(bucket);
 
 		for (FileInfo fileInfo : fileInfos) {
 			System.out.println(fileInfo.toString());
 		}
 
-		int size = fileInfos.size();
-		if (size == prefixedFileInfos.size()) {
+		int size = fileInfos.length;
+		if (size == prefixedFileInfos.length) {
 			for (int i = 0; i < size; ++i) {
-				Assert.assertEquals(fileInfos.get(i).path, fileInfos.get(i).path);
+				String path = fileInfos[i].path;
+				Assert.assertEquals(path, prefixedFileInfos[i]);
+				Assert.assertEquals(fileInfos[i].hash, fileMap.get(path));
+			}
+		} else {
+			// the two file lists are different
+			Assert.fail();
+		}
+	}
+
+	@Test
+	public void testListVersioned() throws Exception {
+		// compare versioned file listing obtained with different methods
+		FileInfo[] fileInfos = this.storage.list(bucket, Storage.ListMode.VERSIONED_DELETED_ALL);
+		FileInfo[] prefixedFileInfos = this.prefixedStorage.list("", Storage.ListMode.VERSIONED_DELETED_ALL);
+
+		for (FileInfo fileInfo : fileInfos) {
+			System.out.println(fileInfo.toString());
+		}
+
+		int size = fileInfos.length;
+		if (size == prefixedFileInfos.length) {
+			for (int i = 0; i < size; ++i) {
+				Assert.assertEquals(fileInfos[i].path, prefixedFileInfos[i].path);
 			}
 		} else {
 			// the two file lists are different
