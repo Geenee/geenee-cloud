@@ -14,16 +14,13 @@ import it.geenee.cloud.*;
 /**
  * Base class for HTTP based upload and download
  */
-public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer  {
+public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Transfer  {
 
 	protected final FileChannel file;
 	protected final String urlPath;
 
-	// the HTTP ETag of the file in the cloud storage
-	protected String hash = null;
-
-	// version of the file in the cloud storage
-	protected String version = null;
+	// last modified time of file in the cloud storage
+	protected FileInfo fileInfo = null;
 
 	// id of transfer, only used for some transfer types, e.g. multipart upload
 	protected String id = null;
@@ -373,13 +370,8 @@ public abstract class HttpTransfer extends HttpFuture<Void> implements Transfer 
 	}
 
 	@Override
-	public String getHash() {
-		return this.hash;
-	}
-
-	@Override
-	public String getVersion() {
-		return this.version;
+	synchronized public FileInfo getInfo() {
+		return this.fileInfo;
 	}
 
 	@Override

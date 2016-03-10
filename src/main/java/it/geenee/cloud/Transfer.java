@@ -3,7 +3,7 @@ package it.geenee.cloud;
 
 import io.netty.util.concurrent.Future;
 
-public interface Transfer extends Future<Void> {
+public interface Transfer extends Future<FileInfo> {
 
 	enum State {
 		/**
@@ -145,18 +145,11 @@ public interface Transfer extends Future<Void> {
 	Part getPart(int index);
 
 	/**
-	 * Get the hash of the file in the cloud storage. For downloads it is available if getState() is at least PROGRESS, for uploads
+	 * Get the file info for the file in the cloud storage. For downloads it is available if getState() is at least PROGRESS, for uploads
 	 * it is available if getState() is SUCCESS.
-	 * @return hash of file
+	 * @return file info
 	 */
-	String getHash();
-
-	/**
-	 * Get the version of the file in the cloud storage. For downloads it is available if getState() is at least PROGRESS, for uploads
-	 * it is available if getState() is SUCCESS.
-	 * @return version of file or null if versioning is not supported
-	 */
-	String getVersion();
+	FileInfo getInfo();
 
 	/**
 	 * Get the id of the transfer or null if the transfer has no id. For example a multiplart upload has an id to continue or cancel it.

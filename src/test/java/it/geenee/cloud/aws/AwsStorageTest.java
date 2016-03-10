@@ -15,9 +15,9 @@ import org.junit.Assert;
 
 
 public class AwsStorageTest {
-	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-upload-testing");
+	Credentials credentials = AwsCloud.getCredentialsFromFile("geenee-cloud-test");
 	String region = "eu-central-1";
-	String bucket = "efreet-recognition-testing";
+	String bucket = "it.geenee.cloud.test";
 
 	File smallFilePath = new File("small test file");
 	int smallFileSize = 1000000;
@@ -88,7 +88,8 @@ public class AwsStorageTest {
 			Transfer.State state = transfer.getState();
 			switch (state) {
 				case SUCCESS:
-					System.out.println("SUCCESS hash: " + transfer.getHash() + " version: " + transfer.getVersion());
+					FileInfo fileInfo = transfer.getInfo();
+					System.out.println("SUCCESS hash: " + fileInfo.hash + " version: " + fileInfo.version);
 					break loop;
 				case FAILED:
 					System.out.println("FAILED");
@@ -107,21 +108,22 @@ public class AwsStorageTest {
 			Transfer uploader = this.storage.startUpload(file.getChannel(), remotePath);
 
 			wait(uploader);
+			FileInfo uploadInfo = uploader.getInfo();
 
-			// compare hash of local file with the hash (etag) returned by aws
-			Assert.assertEquals(uploader.getHash(), this.storage.hash(file.getChannel()));
+			// compare hash of uploaded local file with the hash (etag) returned by aws
+			Assert.assertEquals(this.storage.hash(file.getChannel()), uploadInfo.hash);
 
 			// get file info and compare
 			FileInfo fileInfo = this.storage.getInfo(remotePath, null);
-			Assert.assertEquals(uploader.getHash(), fileInfo.hash);
+			Assert.assertEquals(uploadInfo.hash, fileInfo.hash);
 			Assert.assertEquals(file.getChannel().size(), fileInfo.size);
-			Assert.assertEquals(uploader.getVersion(), fileInfo.version);
+			Assert.assertEquals(uploadInfo.version, fileInfo.version);
 
 			// get file info for version and compare again
-			fileInfo = this.storage.getInfo(remotePath, uploader.getVersion());
-			Assert.assertEquals(uploader.getHash(), fileInfo.hash);
+			fileInfo = this.storage.getInfo(remotePath, uploadInfo.version);
+			Assert.assertEquals(uploadInfo.hash, fileInfo.hash);
 			Assert.assertEquals(file.getChannel().size(), fileInfo.size);
-			Assert.assertEquals(uploader.getVersion(), fileInfo.version);
+			Assert.assertEquals(uploadInfo.version, fileInfo.version);
 		}
 	}
 
@@ -130,9 +132,10 @@ public class AwsStorageTest {
 			Transfer downloader = this.storage.startDownload(file.getChannel(), remotePath, null);
 
 			wait(downloader);
+			FileInfo downloadInfo = downloader.getInfo();
 
-			// compare hash of local file with the hash (etag) returned by aws
-			Assert.assertEquals(downloader.getHash(), this.storage.hash(file.getChannel()));
+			// compare hash of downloaded local file with the hash (etag) returned by aws
+			Assert.assertEquals(this.storage.hash(file.getChannel()), downloadInfo.hash);
 		}
 	}
 

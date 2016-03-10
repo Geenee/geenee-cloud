@@ -18,13 +18,13 @@ public class FileInfo {
 	// size of file
 	public final long size;
 
-	// timestamp
-	public final Date timestamp;
+	// timestamp of file, the number of milliseconds since January 1, 1970, 00:00:00 GMT
+	public final long timestamp;
 
 	// version of the file, null if no versioning or unknown
 	public final String version;
 
-	// true if this is the latest version of the file
+	// true if this is the latest version of the file, false if newer versions exist or unknown if newer versions exist
 	public final boolean latest;
 
 
@@ -34,7 +34,7 @@ public class FileInfo {
 	}
 
 
-	public FileInfo(String path, String hash, long size, Date timestamp, String version, boolean latest) {
+	public FileInfo(String path, String hash, long size, long timestamp, String version, boolean latest) {
 		this.path = path;
 		this.hash = hash;
 		this.size = size;
@@ -53,7 +53,7 @@ public class FileInfo {
 		Configuration.append(b, "path", this.path);
 		Configuration.append(b, "hash", this.hash);
 		Configuration.append(b, "size", this.size);
-		Configuration.append(b, "timestamp", DATE_FORMAT.format(this.timestamp));
+		Configuration.append(b, "timestamp", DATE_FORMAT.format(new Date(this.timestamp)));
 		Configuration.append(b, "version", this.version);
 		Configuration.append(b, "latest", this.latest);
 		b.append('}');

@@ -164,7 +164,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 			} else {
 				// http error (e.g. 400)
-				//System.err.println(content.content().toString(HttpCloud.UTF_8));
+				System.err.println(responseCode + ": " + response.content().toString(HttpCloud.UTF_8));
 				// transfer has failed, maybe retry is possible
 				setFailed(isRetryCode(responseCode), new HttpException(responseCode));
 			}

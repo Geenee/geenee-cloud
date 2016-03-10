@@ -18,6 +18,8 @@ import javax.xml.bind.Unmarshaller;
  * AWS mulitpart uploader
  */
 public class AwsMultipartUploader extends HttpTransfer {
+	String remotePath;
+	long size;
 
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadInitiate.html
 	class InitiateHandler extends HttpTransfer.RequestHandler {
@@ -34,7 +36,7 @@ public class AwsMultipartUploader extends HttpTransfer {
 			InitiateMultipartUploadResult result = (InitiateMultipartUploadResult) unmarshaller.unmarshal(new ByteBufInputStream(response.content()));
 
 			// initate done, start upload
-			initiateDone(result);
+			startTransfer(size, result.uploadId);
 		}
 	}
 
@@ -62,21 +64,32 @@ public class AwsMultipartUploader extends HttpTransfer {
 
 		@Override
 		protected void success(FullHttpResponse response) throws Exception {
-			// get version of newly created file in s3
-			version = cloud.getVersion(response.headers());
 
 			// parse xml
 			JAXBContext jc = JAXBContext.newInstance(CompleteMultipartUploadResult.class);
 			Unmarshaller unmarshaller = jc.createUnmarshaller();
 			CompleteMultipartUploadResult result = (CompleteMultipartUploadResult) unmarshaller.unmarshal(new ByteBufInputStream(response.content()));
 
-			// complete done, transfer was successful
-			completeDone(result);
+			AwsMultipartUploader parent = AwsMultipartUploader.this;
+
+			// FIXME timestamp
+			String hash = AwsCloud.getHash(result.eTag);
+			long timestamp = 0;
+			String version = parent.cloud.getVersion(response.headers());
+
+			synchronized (parent) {
+				parent.fileInfo = new FileInfo(parent.remotePath, hash, parent.size, timestamp, version, true);
+			}
+
+			// upload completed successfully
+			setSuccess(parent.fileInfo);
 		}
 	}
 
-	public AwsMultipartUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath) {
+	public AwsMultipartUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath, String remotePath, long size) {
 		super(cloud, configuration, file, host, urlPath);
+		this.remotePath = remotePath;
+		this.size = size;
 
 		// connect to host
 		connect(new InitiateHandler());
@@ -96,12 +109,6 @@ public class AwsMultipartUploader extends HttpTransfer {
 		});
 	}
 
-	void initiateDone(InitiateMultipartUploadResult result) throws IOException {
-		//System.out.println("initiateDone uploadId " + result.uploadId);
-
-		startTransfer(this.file.size(), result.uploadId);
-	}
-
 	@Override
 	protected void completeTransfer() {
 		// all parts are done, but we need a completion step
@@ -113,12 +120,5 @@ public class AwsMultipartUploader extends HttpTransfer {
 			completeMultipartUpload.addPart(part.index + 1, part.id);
 		}
 		connect(new CompleteHandler(completeMultipartUpload));
-	}
-
-	void completeDone(CompleteMultipartUploadResult result) {
-		// get hash of file in S3 from ETag
-		this.hash = AwsCloud.getHash(result.eTag);
-
-		setSuccess(null);
 	}
 }

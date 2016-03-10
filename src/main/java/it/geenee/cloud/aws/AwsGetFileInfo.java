@@ -13,41 +13,33 @@ import java.util.Map;
 import java.util.TimeZone;
 
 /**
- * Created by wilhelmy on 29.02.16.
+ * Get file info for a file on S3 by using a HEAD request
  */
 class AwsGetFileInfo extends HttpFuture<FileInfo> {
 
-	class GetInfoHandler extends RequestHandler {
-		String remotePath;
-		String version;
-
-		GetInfoHandler(String remotePath, String version) {
-			this.remotePath = remotePath;
-			this.version = version;
-		}
-
-		@Override
-		protected FullHttpRequest getRequest() throws Exception {
-			String urlPath = HttpCloud.encodePath('/' + configuration.prefix + this.remotePath);
-			String urlPathAndVersion = cloud.addVersion(urlPath, this.version);
-			return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.HEAD, urlPathAndVersion);
-		}
-
-		@Override
-		protected void success(FullHttpResponse response) throws Exception {
-			HttpHeaders headers = response.headers();
-
-			String hash = cloud.getHash(headers);
-			long size = Long.parseLong(headers.get("Content-Length"));
-			Date timestamp = HttpHeaders.getDateHeader(response, "Last-Modified"); // https://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3.1
-			String version = cloud.getVersion(headers);
-
-			setSuccess(new FileInfo(this.remotePath, hash, size, timestamp, version, this.version == null));
-		}
-	}
-
-	public AwsGetFileInfo(HttpCloud cloud, Configuration configuration, String host, String remotePath, String version) {
+	public AwsGetFileInfo(HttpCloud cloud, Configuration configuration, String host, final String remotePath, final String requestedVersion) {
 		super(cloud, configuration, host, true);
-		connect(new GetInfoHandler(remotePath, version));
+
+		String urlPath = HttpCloud.encodePath('/' + configuration.prefix + remotePath);
+		final String urlPathAndVersion = cloud.addVersion(urlPath, requestedVersion);
+
+		connect(new RequestHandler() {
+			@Override
+			protected FullHttpRequest getRequest() throws Exception {
+				return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.HEAD, urlPathAndVersion);
+			}
+
+			@Override
+			protected void success(FullHttpResponse response) throws Exception {
+				HttpHeaders headers = response.headers();
+
+				String hash = cloud.getHash(headers);
+				long size = Long.parseLong(headers.get("Content-Length"));
+				long timestamp = HttpHeaders.getDateHeader(response, "Last-Modified").getTime(); // https://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3.1
+				String version = cloud.getVersion(headers);
+
+				setSuccess(new FileInfo(remotePath, hash, size, timestamp, version, requestedVersion == null));
+			}
+		});
 	}
 }

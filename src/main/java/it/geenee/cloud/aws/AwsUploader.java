@@ -2,6 +2,7 @@ package it.geenee.cloud.aws;
 
 import java.io.*;
 import java.nio.channels.FileChannel;
+import java.util.Date;
 
 import io.netty.handler.codec.http.*;
 
@@ -13,22 +14,29 @@ import it.geenee.cloud.http.HttpTransfer;
  * AWS PUT Object
  */
 public class AwsUploader extends HttpTransfer {
+	String remotePath;
+	long size;
 
-	static HttpTransfer create(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath) {
+	static HttpTransfer create(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath) {
+		String urlPath = HttpCloud.encodePath('/' + configuration.prefix + remotePath);
 		try {
-			long fileSize = file.size();
-			if (fileSize <= configuration.partSize)
-				return new AwsUploader(cloud, configuration, file, fileSize, host, urlPath);
+			long size = file.size();
+			if (size <= configuration.partSize)
+				return new AwsUploader(cloud, configuration, file, host, urlPath, remotePath, size);
 			else
-				return new AwsMultipartUploader(cloud, configuration, file, host, urlPath);
+				return new AwsMultipartUploader(cloud, configuration, file, host, urlPath, remotePath, size);
 		} catch (IOException e) {
 			return new AwsUploader(cloud, configuration, file, host, urlPath, e);
 		}
 	}
 
-	private AwsUploader(HttpCloud cloud, Configuration configuration, FileChannel file, long fileSize, String host, String urlPath) {
+	private AwsUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath, String remotePath, long size) {
 		super(cloud, configuration, file, host, urlPath);
-		startTransfer(fileSize, null);
+		this.remotePath = remotePath;
+		this.size = size;
+
+		// start upload with one part
+		startTransfer(size, null);
 	}
 
 	private AwsUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath, Throwable cause) {
@@ -47,22 +55,23 @@ public class AwsUploader extends HttpTransfer {
 				// set state of part to SUCCESS (uploaded part has no id)
 				part.success(null);
 
-				// upload done (there is only one part)
-				uploadDone(headers);
+				AwsUploader parent = AwsUploader.this;
+
+				// FIXME timestamp
+				String hash = parent.cloud.getHash(headers);
+				long timestamp = 0;
+				String version = parent.cloud.getVersion(headers);
+
+				synchronized (parent) {
+					parent.fileInfo = new FileInfo(parent.remotePath, hash, parent.size, timestamp, version, true);
+				}
 			}
 		});
 	}
 
-	void uploadDone(HttpHeaders headers) {
-		// get hash of file in S3
-		this.hash = this.cloud.getHash(headers);
-
-		// get current version of file in S3
-		this.version = this.cloud.getVersion(headers);
-	}
-
 	@Override
 	protected void completeTransfer() {
-		setSuccess(null);
+		// upload completed successfully
+		setSuccess(this.fileInfo);
 	}
 }

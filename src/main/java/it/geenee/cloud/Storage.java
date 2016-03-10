@@ -33,8 +33,8 @@ public interface Storage {
 	 * @return
 	 */
 	Transfer startDownload(FileChannel file, String remotePath, String version);
-	default void download(FileChannel file, String remotePath, String version) throws InterruptedException, ExecutionException {
-		startDownload(file, remotePath, version).get();
+	default FileInfo download(FileChannel file, String remotePath, String version) throws InterruptedException, ExecutionException {
+		return startDownload(file, remotePath, version).get();
 	}
 
 	/**
@@ -44,8 +44,8 @@ public interface Storage {
 	 * @return
 	 */
 	Transfer startUpload(FileChannel file, String remotePath);
-	default void upload(FileChannel file, String remotePath) throws InterruptedException, ExecutionException {
-		startUpload(file, remotePath).get();
+	default FileInfo upload(FileChannel file, String remotePath) throws InterruptedException, ExecutionException {
+		return startUpload(file, remotePath).get();
 	}
 
 	/**

@@ -1,5 +1,7 @@
 package it.geenee.cloud;
 
+import java.util.Date;
+
 /**
  * Information about an upload
  */
@@ -10,11 +12,11 @@ public class UploadInfo {
 	// id of the upload
 	public final String uploadId;
 
-	// timestamp in iso format and utc time zone
-	public final String timestamp;
+	// timestamp of the upload, the number of milliseconds since January 1, 1970, 00:00:00 GMT
+	public final long timestamp;
 
 
-	public UploadInfo(String path, String uploadId, String timestamp) {
+	public UploadInfo(String path, String uploadId, long timestamp) {
 		this.path = path;
 		this.uploadId = uploadId;
 		this.timestamp = timestamp;
@@ -25,7 +27,7 @@ public class UploadInfo {
 		b.append('{');
 		Configuration.append(b, "path", this.path);
 		Configuration.append(b, "uploadId", this.uploadId);
-		Configuration.append(b, "timestamp", this.timestamp);
+		Configuration.append(b, "timestamp", FileInfo.DATE_FORMAT.format(new Date(this.timestamp)));
 		b.append('}');
 		return b.toString();
 	}

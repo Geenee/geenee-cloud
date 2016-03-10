@@ -76,14 +76,12 @@ public class AwsStorage implements Storage {
 
 	@Override
 	public Transfer startDownload(FileChannel file, String remotePath, String version) {
-		String urlPath = HttpCloud.encodePath('/' + this.configuration.prefix + remotePath);
-		return new HttpDownloader(this.cloud, this.configuration, file, this.host, urlPath, version);
+		return new HttpDownloader(this.cloud, this.configuration, file, this.host, remotePath, version);
 	}
 
 	@Override
 	public Transfer startUpload(FileChannel file, String remotePath) {
-		String urlPath = HttpCloud.encodePath('/' + this.configuration.prefix + remotePath);
-		return AwsUploader.create(this.cloud, this.configuration, file, this.host, urlPath);
+		return AwsUploader.create(this.cloud, this.configuration, file, this.host, remotePath);
 	}
 
 	@Override
@@ -148,7 +146,7 @@ public class AwsStorage implements Storage {
 									getPath(entry.key, remotePath),
 									AwsCloud.getHash(entry.eTag),
 									entry.size,
-									DATE_FORMAT.parse(entry.lastModified),
+									DATE_FORMAT.parse(entry.lastModified).getTime(),
 									null,
 									true);
 						}
@@ -205,7 +203,7 @@ public class AwsStorage implements Storage {
 										getPath(version.key, remotePath),
 										AwsCloud.getHash(version.eTag),
 										version.size,
-										DATE_FORMAT.parse(version.lastModified),
+										DATE_FORMAT.parse(version.lastModified).getTime(),
 										version.versionId,
 										version.isLatest);
 							}
@@ -218,7 +216,7 @@ public class AwsStorage implements Storage {
 										getPath(deleteMarker.key, remotePath),
 										null,
 										0,
-										DATE_FORMAT.parse(deleteMarker.lastModified),
+										DATE_FORMAT.parse(deleteMarker.lastModified).getTime(),
 										deleteMarker.versionId,
 										deleteMarker.isLatest);
 							}
@@ -289,7 +287,7 @@ public class AwsStorage implements Storage {
 						list.add(new UploadInfo(
 								getPath(upload.key, remotePath),
 								upload.uploadId,
-								upload.initiated));
+								DATE_FORMAT.parse(upload.initiated).getTime()));
 					}
 				}
 
