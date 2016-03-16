@@ -41,7 +41,7 @@ public class HttpDownloader extends HttpTransfer {
 			}
 
 			@Override
-			protected void success(FullHttpResponse response) throws Exception {
+			protected void success(HttpResponse response) throws Exception {
 				HttpHeaders headers = response.headers();
 				HttpDownloader parent = HttpDownloader.this;
 

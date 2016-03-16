@@ -28,9 +28,9 @@ abstract public class AwsRequest<V> extends HttpFuture<V> {
 		}
 
 		@Override
-		protected void success(FullHttpResponse response) throws Exception {
+		protected void success(HttpResponse response) throws Exception {
 			//System.out.println(response.content().toString(HttpCloud.UTF_8));
-			AwsRequest.this.success(new ByteBufInputStream(response.content()));
+			AwsRequest.this.success(getContent());
 		}
 	}
 

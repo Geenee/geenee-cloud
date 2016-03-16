@@ -14,7 +14,6 @@ import org.junit.Assert;
 public class AwsComputeTest {
 	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-server-testing");
 	String region = "eu-central-1";
-	String instanceId = "i-1d8409a1";
 
 	//@Test
 	public void testGetInstance() throws Exception {
@@ -66,8 +65,10 @@ public class AwsComputeTest {
 		Cloud cloud = new AwsCloud(configuration);
 		Compute compute = cloud.getCompute();
 
-		Map<String, String> tags = compute.getTags(instanceId);
-
-		System.out.println(tags.toString());
+		List<InstanceInfo> instanceInfos = compute.list().get();
+		for (InstanceInfo instanceInfo : instanceInfos) {
+			Map<String, String> tags = compute.getTags(instanceInfo.instanceId);
+			System.out.println(instanceInfo.instanceId + ": " + tags.toString());
+		}
 	}
 }

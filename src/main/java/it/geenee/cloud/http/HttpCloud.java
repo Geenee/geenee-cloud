@@ -256,18 +256,4 @@ public abstract class HttpCloud implements Cloud {
 	public static String addQuery(String urlPath, String key) {
 		return urlPath + (urlPath.indexOf('?') == -1 ? '?' : '&') + key;
 	}
-
-	public static byte[] collectContent(byte[] data, HttpContent content) {
-		ByteBuf buf = content.content();
-		int readableBytes = buf.readableBytes();
-		if (data == null) {
-			data = new byte[readableBytes];
-			buf.readBytes(data);
-		} else if (readableBytes > 0) {
-			int position = data.length;
-			data = Arrays.copyOf(data, position + readableBytes);
-			buf.readBytes(data, position, readableBytes);
-		}
-		return data;
-	}
 }

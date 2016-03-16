@@ -30,7 +30,7 @@ class AwsGetFileInfo extends HttpFuture<FileInfo> {
 			}
 
 			@Override
-			protected void success(FullHttpResponse response) throws Exception {
+			protected void success(HttpResponse response) throws Exception {
 				HttpHeaders headers = response.headers();
 
 				String hash = cloud.getHash(headers);

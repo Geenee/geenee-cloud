@@ -31,8 +31,8 @@ public class AwsGetInstance extends HttpFuture<InstanceInfo> {
 		}
 
 		@Override
-		protected void success(FullHttpResponse response) throws Exception {
-			done(this.path, response.content().toString(HttpCloud.UTF_8));
+		protected void success(HttpResponse response) throws Exception {
+			done(this.path, getContentAsString());
 		}
 	}
 

@@ -29,11 +29,11 @@ public class AwsMultipartUploader extends HttpTransfer {
 		}
 
 		@Override
-		protected void success(FullHttpResponse response) throws Exception {
+		protected void success(HttpResponse response) throws Exception {
 			// parse xml
 			JAXBContext jc = JAXBContext.newInstance(InitiateMultipartUploadResult.class);
 			Unmarshaller unmarshaller = jc.createUnmarshaller();
-			InitiateMultipartUploadResult result = (InitiateMultipartUploadResult) unmarshaller.unmarshal(new ByteBufInputStream(response.content()));
+			InitiateMultipartUploadResult result = (InitiateMultipartUploadResult) unmarshaller.unmarshal(getContent());
 
 			// initate done, start upload
 			startTransfer(size, result.uploadId);
@@ -63,12 +63,12 @@ public class AwsMultipartUploader extends HttpTransfer {
 		}
 
 		@Override
-		protected void success(FullHttpResponse response) throws Exception {
+		protected void success(HttpResponse response) throws Exception {
 
 			// parse xml
 			JAXBContext jc = JAXBContext.newInstance(CompleteMultipartUploadResult.class);
 			Unmarshaller unmarshaller = jc.createUnmarshaller();
-			CompleteMultipartUploadResult result = (CompleteMultipartUploadResult) unmarshaller.unmarshal(new ByteBufInputStream(response.content()));
+			CompleteMultipartUploadResult result = (CompleteMultipartUploadResult) unmarshaller.unmarshal(getContent());
 
 			AwsMultipartUploader parent = AwsMultipartUploader.this;
 

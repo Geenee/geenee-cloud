@@ -110,7 +110,7 @@ public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Trans
 		}
 	}
 
-	public abstract class UploadHandler extends HttpTransfer.Handler<HttpObject> {
+	public abstract class UploadHandler extends HttpTransfer.Handler {
 		final String urlPath;
 		final Part part;
 
@@ -186,12 +186,14 @@ public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Trans
 					}
 				} else {
 					// http error (e.g. 400)
-					//System.err.println(content.content().toString(HttpCloud.UTF_8));
-					if (content instanceof LastHttpContent) {
-						ctx.close();
+					ByteBuf buf = content.content();
+
+					if (addContent(buf, 65536) && content instanceof LastHttpContent) {
+						//System.err.println(getContentAsString());
 
 						// transfer has failed, maybe retry is possible
 						setFailed(isRetryCode(this.responseCode), new HttpException(this.responseCode));
+						ctx.close();
 					}
 				}
 			}
@@ -241,7 +243,7 @@ public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Trans
 		}
 	}
 
-	abstract class DownloadHandler extends HttpTransfer.Handler<HttpObject> {
+	abstract class DownloadHandler extends HttpTransfer.Handler {
 		final String urlPath;
 		final Part part;
 
@@ -297,10 +299,10 @@ public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Trans
 				}
 			} else if (msg instanceof HttpContent) {
 				HttpContent content = (HttpContent) msg;
+				ByteBuf buf = content.content();
 
 				if (this.responseCode / 100 == 2) {
 					// write content to file
-					ByteBuf buf = content.content();
 					this.position += file.write(buf.nioBuffer(), this.part.offset + this.position);
 
 					if (content instanceof LastHttpContent) {
@@ -315,12 +317,12 @@ public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Trans
 					}
 				} else {
 					// http error (e.g. 400)
-					//System.err.println(content.content().toString(HttpCloud.UTF_8));
-					if (content instanceof LastHttpContent) {
-						ctx.close();
+					if (addContent(buf, 65536) && content instanceof LastHttpContent) {
+						//System.err.println(getContentAsString());
 
 						// transfer has failed, maybe retry is possible
 						setFailed(isRetryCode(this.responseCode), new HttpException(this.responseCode));
+						ctx.close();
 					}
 				}
 			}

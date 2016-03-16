@@ -1,5 +1,7 @@
 package it.geenee.cloud.http;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.charset.Charset;
@@ -9,8 +11,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.timeout.*;
 import io.netty.util.concurrent.Future;
@@ -58,14 +62,21 @@ public abstract class HttpFuture<V> implements Future<V> {
 	/**
 	 * Base class for all http handlers that has retry logic already built in
 	 */
-	protected abstract class Handler<I> extends SimpleChannelInboundHandler<I> {
+	protected abstract class Handler extends SimpleChannelInboundHandler<HttpObject> {
 		protected boolean success = false;
+
+		// content
+		byte[] content = new byte[0];
+		int position = 0;
 
 		@Override
 		public boolean isSharable() {
 			// enable adding/removing multiple times, but the handler is used by one pipeline at a time
 			return true;
 		}
+
+		//@Override
+		//protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception;
 
 		@Override
 		public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
@@ -107,6 +118,34 @@ public abstract class HttpFuture<V> implements Future<V> {
 			}
 		}
 
+		protected boolean addContent(ByteBuf buf, int maxSize) {
+			// check if content becomes too large
+			int length = buf.readableBytes();
+			int newPosition = this.position + length;
+			if (newPosition > maxSize) {
+				// error: content too large
+				setFailed(new TooLongFrameException("HTTP response too large"));
+
+				// ctx.close() not needed because setFailed() closes all channels
+				return false;
+			}
+
+			// copy content
+			if (newPosition > this.content.length)
+				this.content = Arrays.copyOf(this.content, Math.max(this.content.length * 2, newPosition));
+			buf.readBytes(this.content, this.position, length);
+			this.position = newPosition;
+			return true;
+		}
+
+		protected String getContentAsString() {
+			return new String(this.content, 0, this.position, HttpCloud.UTF_8);
+		}
+
+		protected InputStream getContent() {
+			return new ByteArrayInputStream(this.content, 0, this.position);
+		}
+
 		/**
 		 * Increments the retry count and returns true if failed because maximum retry count has been reached
 		 * @return true if failed because maximum retry count has been reached
@@ -124,51 +163,53 @@ public abstract class HttpFuture<V> implements Future<V> {
 				|| responseCode == 429;
 	}
 
-	protected abstract class RequestHandler extends Handler<FullHttpResponse> {
+	protected abstract class RequestHandler extends Handler {
 		int retryCount = 0;
-
-		@Override
-		public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-			// pipeline gets built
-			ctx.pipeline().addBefore("handler", "aggregator", new HttpObjectAggregator(1000000));
-
-			super.handlerAdded(ctx);
-		}
-
+		HttpResponse response;
 
 		@Override
 		public void channelActive(ChannelHandlerContext ctx) throws Exception {
 			// connection is established: send http start to server
 
-			// build http start with empty content
+			// build http request with empty content
 			FullHttpRequest request = getRequest();
 			HttpHeaders headers = request.headers();
 			headers.set(HttpHeaders.Names.HOST, host);
 			cloud.extendRequest(request, configuration);
 
-			// send the http start
+			// send the http request
 			ctx.writeAndFlush(request);
 
 			super.channelActive(ctx);
 		}
 
 		@Override
-		protected void channelRead0(ChannelHandlerContext ctx, FullHttpResponse response) throws Exception {
-			// get http response code
-			int responseCode = response.getStatus().code();
+		protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
+			if (msg instanceof HttpResponse) {
+				this.response = (HttpResponse) msg;
+			} else if (msg instanceof HttpContent) {
+				HttpContent content = (HttpContent) msg;
+				ByteBuf buf = content.content();
 
-			if (responseCode / 100 == 2) {
-				// success
-				success(response);
-				this.success = true;
+				if (addContent(buf, 4194304) && content instanceof LastHttpContent) {
+					// get http response code
+					int responseCode = this.response.getStatus().code();
 
-			} else {
-				// http error (e.g. 400)
-				System.err.println(responseCode + ": " + response.content().toString(HttpCloud.UTF_8));
-				// transfer has failed, maybe retry is possible
-				setFailed(isRetryCode(responseCode), new HttpException(responseCode));
+					if (responseCode / 100 == 2) {
+						// success
+						success(this.response);
+						this.success = true;
+
+					} else {
+						// http error (e.g. 400)
+						//System.err.println(responseCode + ": " + getContentAsString());
+
+						// transfer has failed, maybe retry is possible
+						setFailed(isRetryCode(responseCode), new HttpException(responseCode));
+					}
+					ctx.close();
+				}
 			}
-			ctx.close();
 		}
 
 		@Override
@@ -185,7 +226,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 		/**
 		 * Gets called when the http get start was successful
 		 */
-		abstract protected void success(FullHttpResponse response) throws Exception;
+		abstract protected void success(HttpResponse response) throws Exception;
 	}
 
 
