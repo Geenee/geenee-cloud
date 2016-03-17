@@ -19,9 +19,9 @@ public class AwsStorageTest {
 	String region = "eu-central-1";
 	String bucket = "it.geenee.cloud.test";
 
-	File smallFilePath = new File("small test file");
+	File smallFilePath = new File("tmp/small test file");
 	int smallFileSize = 1000000;
-	File largeFilePath = new File("large test file");
+	File largeFilePath = new File("tmp/large test file");
 	int largeFileSize = (AwsCloud.DEFAULT_CONFIGURATION.partSize * 5) / 2; // 2.5 parts
 
 	Storage storage;
@@ -43,6 +43,9 @@ public class AwsStorageTest {
 	void generateFile(File path, int size) throws IOException {
 		Random random = new Random(1337);
 		byte[] data = new byte[1000];
+		File dir = path.getParentFile();
+		if (dir != null)
+			dir.mkdirs();
 		try (FileOutputStream f = new FileOutputStream(path)) {
 			for (int i = 0; i < size / 1000; ++i) {
 				random.nextBytes(data);

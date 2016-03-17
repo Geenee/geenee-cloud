@@ -9,3 +9,6 @@ gradlew.bat
 # IntelliJ
 .idea/
 *.iml
+
+# test
+tmp/

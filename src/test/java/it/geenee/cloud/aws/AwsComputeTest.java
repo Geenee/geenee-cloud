@@ -12,7 +12,7 @@ import org.junit.Assert;
 
 
 public class AwsComputeTest {
-	Credentials credentials = AwsCloud.getCredentialsFromFile("efreet-server-testing");
+	Credentials credentials = AwsCloud.getCredentialsFromFile("geenee-cloud-test");
 	String region = "eu-central-1";
 
 	//@Test

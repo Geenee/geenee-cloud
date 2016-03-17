@@ -1,8 +1,8 @@
 apply plugin: 'java'
-apply plugin: 'maven'
+apply plugin: 'maven-publish'
 
 group = 'it.geenee'
-version = '0.4.0-SNAPSHOT'
+version = '0.4.0'
 
 repositories {
 	mavenCentral()
@@ -40,6 +40,17 @@ task doc(type: Javadoc) {
 }
 
 // gradle install
+task install(dependsOn: publishToMavenLocal) {
+}
+
+// gradle publish
+publishing {
+	publications {
+		jar(MavenPublication) {
+			from components.java
+		}
+	}
+}
 
 // gradle wrapper
 task wrapper(type: Wrapper) {
