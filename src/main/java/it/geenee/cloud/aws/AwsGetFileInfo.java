@@ -1,23 +1,18 @@
 package it.geenee.cloud.aws;
 
 import io.netty.handler.codec.http.*;
-import it.geenee.cloud.Configuration;
+import it.geenee.cloud.Cloud;
 import it.geenee.cloud.FileInfo;
 import it.geenee.cloud.http.HttpCloud;
 import it.geenee.cloud.http.HttpFuture;
 
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Map;
-import java.util.TimeZone;
 
 /**
  * Get file info for a file on S3 by using a HEAD request
  */
 class AwsGetFileInfo extends HttpFuture<FileInfo> {
 
-	public AwsGetFileInfo(HttpCloud cloud, Configuration configuration, String host, final String remotePath, final String requestedVersion) {
+	public AwsGetFileInfo(HttpCloud cloud, Cloud.Configuration configuration, String host, final String remotePath, final String requestedVersion) {
 		super(cloud, configuration, host, true);
 
 		String urlPath = HttpCloud.encodePath('/' + configuration.prefix + remotePath);

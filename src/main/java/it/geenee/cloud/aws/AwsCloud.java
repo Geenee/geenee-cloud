@@ -2,6 +2,8 @@ package it.geenee.cloud.aws;
 
 
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.util.concurrent.Future;
 import it.geenee.cloud.*;
@@ -46,11 +48,42 @@ public class AwsCloud extends HttpCloud {
 
 	/**
 	 * Constructor
-	 * @param configuration global configuration
+	 * @param configBuilder global configuration
 	 * @throws SSLException
 	 */
-	public AwsCloud(Configuration configuration) throws SSLException {
-		super(DEFAULT_CONFIGURATION.merge(configuration));
+	public AwsCloud(ConfigBuilder configBuilder) throws SSLException {
+		super(build(DEFAULT_CONFIGURATION, configBuilder));
+	}
+
+	/**
+	 * Constructor
+	 * @param configBuilder global configuration
+	 * @param eventLoopGroup event loop group to use. Reuse the same event loop group if you can
+	 * @param channelClass channel class, must match the type of eventLoopGroup (Nio or Epoll)
+	 * @throws SSLException
+	 */
+	public AwsCloud(ConfigBuilder configBuilder, EventLoopGroup eventLoopGroup, Class<? extends SocketChannel> channelClass) throws SSLException {
+		super(build(DEFAULT_CONFIGURATION, configBuilder), eventLoopGroup, channelClass);
+	}
+
+	static Configuration build(Configuration defaultConfiguration, ConfigBuilder configBuilder) {
+		if (configBuilder == null)
+			return defaultConfiguration;
+
+		Credentials credentials = null;
+		if (configBuilder.credentials instanceof Credentials)
+			credentials = (Credentials) configBuilder.credentials;
+		else if (configBuilder.credentials instanceof String)
+			credentials = getCredentialsFromFile((String) configBuilder.credentials);
+
+		return defaultConfiguration.merge(new Configuration(
+				configBuilder.region,
+				credentials,
+				configBuilder.timeout,
+				configBuilder.retryCount,
+				configBuilder.partSize,
+				configBuilder.channelCount,
+				configBuilder.prefix));
 	}
 
 	// general
@@ -119,9 +152,9 @@ public class AwsCloud extends HttpCloud {
 	// compute
 
 	@Override
-	public AwsCompute getCompute(Configuration configuration) {
+	public AwsCompute getCompute(ConfigBuilder configBuilder) {
 		// merge global configuration with given configuration
-		configuration = this.configuration.merge(configuration);
+		Configuration configuration = build(this.configuration, configBuilder);
 		String host = getHost("ec2", configuration.region);
 		return new AwsCompute(this, configuration, host);
 	}
@@ -129,9 +162,9 @@ public class AwsCloud extends HttpCloud {
 	// storage
 
 	@Override
-	public AwsStorage getStorage(Configuration configuration) {
+	public AwsStorage getStorage(ConfigBuilder configBuilder) {
 		// merge global configuration with given configuration
-		configuration = this.configuration.merge(configuration);
+		Configuration configuration = build(this.configuration, configBuilder);
 		String host = getHost("s3", configuration.region);
 		return new AwsStorage(this, configuration, host);
 	}

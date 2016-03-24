@@ -35,12 +35,12 @@ public class InstanceInfo {
 	public String toString() {
 		StringBuilder b = new StringBuilder();
 		b.append('{');
-		Configuration.append(b, "instanceId", this.instanceId);
-		Configuration.append(b, "groupId", this.groupId);
-		Configuration.append(b, "zone", this.zone);
-		Configuration.append(b, "region", this.region);
-		Configuration.append(b, "privateIpAddress", this.privateIpAddress);
-		Configuration.append(b, "ipAddress", this.ipAddress);
+		Cloud.append(b, "instanceId", this.instanceId);
+		Cloud.append(b, "groupId", this.groupId);
+		Cloud.append(b, "zone", this.zone);
+		Cloud.append(b, "region", this.region);
+		Cloud.append(b, "privateIpAddress", this.privateIpAddress);
+		Cloud.append(b, "ipAddress", this.ipAddress);
 		b.append('}');
 		return b.toString();
 	}

@@ -19,7 +19,7 @@ public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Trans
 	protected final FileChannel file;
 	protected final String urlPath;
 
-	// last modified time of file in the cloud storage
+	// info for file in the cloud storage
 	protected FileInfo fileInfo = null;
 
 	// id of transfer, only used for some transfer types, e.g. multipart upload
@@ -163,6 +163,7 @@ public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Trans
 					this.uploading = true;
 					this.position = 0;
 					upload(ctx);
+					//ctx.writeAndFlush(new DefaultFileRegion(file, this.part.offset, this.part.length));
 
 					// set state of part to PROGRESS
 					this.part.setState(Part.State.PROGRESS);
@@ -344,7 +345,7 @@ public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Trans
 	 * @param host host to connect to
 	 * @param urlPath remote path of file
 	 */
-	public HttpTransfer(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath) {
+	public HttpTransfer(HttpCloud cloud, Cloud.Configuration configuration, FileChannel file, String host, String urlPath) {
 		super(cloud, configuration, host, true);
 
 		this.file = file;
@@ -372,7 +373,7 @@ public abstract class HttpTransfer extends HttpFuture<FileInfo> implements Trans
 	}
 
 	@Override
-	synchronized public FileInfo getInfo() {
+	public synchronized FileInfo getInfo() {
 		return this.fileInfo;
 	}
 

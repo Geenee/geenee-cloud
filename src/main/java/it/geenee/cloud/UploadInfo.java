@@ -25,9 +25,9 @@ public class UploadInfo {
 	public String toString() {
 		StringBuilder b = new StringBuilder();
 		b.append('{');
-		Configuration.append(b, "path", this.path);
-		Configuration.append(b, "uploadId", this.uploadId);
-		Configuration.append(b, "timestamp", FileInfo.DATE_FORMAT.format(new Date(this.timestamp)));
+		Cloud.append(b, "path", this.path);
+		Cloud.append(b, "uploadId", this.uploadId);
+		Cloud.append(b, "timestamp", FileInfo.DATE_FORMAT.format(new Date(this.timestamp)));
 		b.append('}');
 		return b.toString();
 	}

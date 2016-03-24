@@ -19,11 +19,11 @@ import java.util.*;
 
 public class AwsStorage implements Storage {
 	final AwsCloud cloud;
-	final Configuration configuration;
+	final Cloud.Configuration configuration;
 	final String host;
 	static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 
-	AwsStorage(AwsCloud cloud, Configuration configuration, String host) {
+	AwsStorage(AwsCloud cloud, Cloud.Configuration configuration, String host) {
 		this.cloud = cloud;
 		this.configuration = configuration;
 		this.host = host;

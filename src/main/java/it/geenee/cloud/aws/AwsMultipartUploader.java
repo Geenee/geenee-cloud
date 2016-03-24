@@ -86,7 +86,7 @@ public class AwsMultipartUploader extends HttpTransfer {
 		}
 	}
 
-	public AwsMultipartUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath, String remotePath, long size) {
+	public AwsMultipartUploader(HttpCloud cloud, Cloud.Configuration configuration, FileChannel file, String host, String urlPath, String remotePath, long size) {
 		super(cloud, configuration, file, host, urlPath);
 		this.remotePath = remotePath;
 		this.size = size;

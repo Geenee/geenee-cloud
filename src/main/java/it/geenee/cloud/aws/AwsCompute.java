@@ -2,8 +2,8 @@ package it.geenee.cloud.aws;
 
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.concurrent.Future;
+import it.geenee.cloud.Cloud;
 import it.geenee.cloud.Compute;
-import it.geenee.cloud.Configuration;
 import it.geenee.cloud.InstanceInfo;
 import it.geenee.cloud.http.HttpCloud;
 
@@ -18,10 +18,10 @@ import java.util.Map;
 
 public class AwsCompute implements Compute {
 	final AwsCloud cloud;
-	final Configuration configuration;
+	final Cloud.Configuration configuration;
 	final String host;
 
-	AwsCompute(AwsCloud cloud, Configuration configuration, String host) {
+	AwsCompute(AwsCloud cloud, Cloud.Configuration configuration, String host) {
 		this.cloud = cloud;
 		this.configuration = configuration;
 		this.host = host;

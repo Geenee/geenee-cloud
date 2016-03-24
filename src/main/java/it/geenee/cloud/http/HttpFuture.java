@@ -33,7 +33,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 	// cloud and configuration
 	protected final HttpCloud cloud; // has cloud provider specific extendRequest() funciton
-	protected final Configuration configuration;
+	protected final Cloud.Configuration configuration;
 
 	// host to connect to
 	protected final String host;
@@ -230,7 +230,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 	}
 
 
-	public HttpFuture(HttpCloud cloud, Configuration configuration, String host, boolean https) {
+	public HttpFuture(HttpCloud cloud, Cloud.Configuration configuration, String host, boolean https) {
 		this.cloud = cloud;
 		this.configuration = configuration;
 		this.host = host;
@@ -466,7 +466,15 @@ public abstract class HttpFuture<V> implements Future<V> {
 		int timeout = this.configuration.timeout;
 
 		// create channel
-		Channel channel = new NioSocketChannel();
+		//Channel channel = new NioSocketChannel();
+
+		Channel channel;
+		try {
+			channel = this.cloud.channelClass.newInstance();
+		} catch (Exception e) {
+			setFailed(e);
+			return;
+		}
 
 		// configure channel
 		ChannelConfig config = channel.config();

@@ -50,12 +50,12 @@ public class FileInfo {
 	public String toString() {
 		StringBuilder b = new StringBuilder();
 		b.append('{');
-		Configuration.append(b, "path", this.path);
-		Configuration.append(b, "hash", this.hash);
-		Configuration.append(b, "size", this.size);
-		Configuration.append(b, "timestamp", DATE_FORMAT.format(new Date(this.timestamp)));
-		Configuration.append(b, "version", this.version);
-		Configuration.append(b, "latest", this.latest);
+		Cloud.append(b, "path", this.path);
+		Cloud.append(b, "hash", this.hash);
+		Cloud.append(b, "size", this.size);
+		Cloud.append(b, "timestamp", DATE_FORMAT.format(new Date(this.timestamp)));
+		Cloud.append(b, "version", this.version);
+		Cloud.append(b, "latest", this.latest);
 		b.append('}');
 		return b.toString();
 	}

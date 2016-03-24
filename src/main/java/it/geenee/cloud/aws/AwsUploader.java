@@ -17,7 +17,7 @@ public class AwsUploader extends HttpTransfer {
 	String remotePath;
 	long size;
 
-	static HttpTransfer create(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String remotePath) {
+	static HttpTransfer create(HttpCloud cloud, Cloud.Configuration configuration, FileChannel file, String host, String remotePath) {
 		String urlPath = HttpCloud.encodePath('/' + configuration.prefix + remotePath);
 		try {
 			long size = file.size();
@@ -26,11 +26,12 @@ public class AwsUploader extends HttpTransfer {
 			else
 				return new AwsMultipartUploader(cloud, configuration, file, host, urlPath, remotePath, size);
 		} catch (IOException e) {
+			// return failed transfer
 			return new AwsUploader(cloud, configuration, file, host, urlPath, e);
 		}
 	}
 
-	private AwsUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath, String remotePath, long size) {
+	private AwsUploader(HttpCloud cloud, Cloud.Configuration configuration, FileChannel file, String host, String urlPath, String remotePath, long size) {
 		super(cloud, configuration, file, host, urlPath);
 		this.remotePath = remotePath;
 		this.size = size;
@@ -39,7 +40,7 @@ public class AwsUploader extends HttpTransfer {
 		startTransfer(size, null);
 	}
 
-	private AwsUploader(HttpCloud cloud, Configuration configuration, FileChannel file, String host, String urlPath, Throwable cause) {
+	private AwsUploader(HttpCloud cloud, Cloud.Configuration configuration, FileChannel file, String host, String urlPath, Throwable cause) {
 		super(cloud, configuration, file, host, urlPath);
 		setFailed(cause);
 	}

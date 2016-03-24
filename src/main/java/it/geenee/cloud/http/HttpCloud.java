@@ -1,34 +1,37 @@
 package it.geenee.cloud.http;
 
+import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.HashedWheelTimer;
 import it.geenee.cloud.Cloud;
-import it.geenee.cloud.Configuration;
 import org.apache.commons.codec.binary.Base64;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLException;
-import java.net.URLEncoder;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channel;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
-import java.util.Arrays;
+
 
 public abstract class HttpCloud implements Cloud {
 
 	// configuration
-	protected final Configuration configuration;
+	public final Configuration configuration;
 
 	public final SslContext sslCtx;
-	public final EventLoopGroup eventLoopGroup = new NioEventLoopGroup();
+	public final EventLoopGroup eventLoopGroup;
+	public final Class<? extends SocketChannel> channelClass;
 	public final HashedWheelTimer timer = new HashedWheelTimer();
 
 
@@ -38,10 +41,15 @@ public abstract class HttpCloud implements Cloud {
 	 * @throws SSLException
 	 */
 	public HttpCloud(Configuration configuration) throws SSLException {
+		this(configuration, new NioEventLoopGroup(), NioSocketChannel.class);
+	}
+	public HttpCloud(Configuration configuration, EventLoopGroup eventLoopGroup, Class<? extends SocketChannel> channelClass) throws SSLException {
 		this.configuration = configuration;
-
 		this.sslCtx = SslContextBuilder.forClient()
 				.trustManager(InsecureTrustManagerFactory.INSTANCE).build();
+
+		this.eventLoopGroup = eventLoopGroup;
+		this.channelClass = channelClass;
 	}
 
 	// helpers

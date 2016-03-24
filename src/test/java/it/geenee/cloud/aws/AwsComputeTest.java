@@ -20,7 +20,7 @@ public class AwsComputeTest {
 		//HttpFuture.HTTP_PORT = 8080;
 		//AwsGetInstance.HOST = "localhost";
 
-		Cloud cloud = new AwsCloud(Cloud.configure().timeout(5).build());
+		Cloud cloud = new AwsCloud(Cloud.configure().timeout(5));
 
 		try {
 			InstanceInfo instanceInfo = cloud.getInstance();
@@ -38,11 +38,9 @@ public class AwsComputeTest {
 
 	@Test
 	public void testInstances() throws Exception {
-		Configuration configuration = Cloud.configure()
+		Cloud cloud = new AwsCloud(Cloud.configure()
 				.region(region)
-				.credentials(credentials)
-				.build();
-		Cloud cloud = new AwsCloud(configuration);
+				.credentials(credentials));
 		Compute compute = cloud.getCompute();
 
 		List<InstanceInfo> instanceInfos;
@@ -58,11 +56,9 @@ public class AwsComputeTest {
 
 	@Test
 	public void testTags() throws Exception {
-		Configuration configuration = Cloud.configure()
+		Cloud cloud = new AwsCloud(Cloud.configure()
 				.region(region)
-				.credentials(credentials)
-				.build();
-		Cloud cloud = new AwsCloud(configuration);
+				.credentials(credentials));
 		Compute compute = cloud.getCompute();
 
 		List<InstanceInfo> instanceInfos = compute.list().get();

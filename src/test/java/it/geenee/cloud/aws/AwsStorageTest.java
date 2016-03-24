@@ -31,13 +31,11 @@ public class AwsStorageTest {
 	public AwsStorageTest() throws IOException {
 
 		// create cloud storage object
-		Configuration configuration = Cloud.configure()
+		Cloud cloud = new AwsCloud(Cloud.configure()
 				.region(region)
-				.credentials(credentials)
-				.build();
-		Cloud cloud = new AwsCloud(configuration);
+				.credentials(credentials));
 		this.storage = cloud.getStorage();
-		this.prefixedStorage = cloud.getStorage(Cloud.configure().prefix(bucket).build());
+		this.prefixedStorage = cloud.getStorage(Cloud.configure().prefix(bucket));
 	}
 
 	void generateFile(File path, int size) throws IOException {
@@ -228,4 +226,112 @@ public class AwsStorageTest {
 			Assert.fail();
 		}
 	}
+/*
+	@Test
+	public void testLog() throws Exception {
+		// create cloud storage object
+		Configuration configuration = Cloud.configure()
+				.region("eu-central-1")
+				.credentials(AwsCloud.getCredentialsFromFile("geenee-publish"))
+				.prefix("eu-central.geeneeapi.recognition/production-log/")
+				.build();
+		Cloud cloud = new AwsCloud(configuration);
+		Storage storage = cloud.getStorage();
+
+		String[] files = storage.list("");
+
+		for (String name : files) {
+			//File f = new File("/Volumes/tagging/10_projects/vox/shopping-queen/sq-168/09_queries/day-3/", name);
+			File path = new File("/Users/wilhelmy/Downloads/log/", name);
+			FileInfo fileInfo;
+			try (RandomAccessFile file = new RandomAccessFile(path, "rw")) {
+				fileInfo = storage.download(file.getChannel(), name, null);
+			}
+			path.setLastModified(fileInfo.timestamp);
+		}
+
+	}
+*/
+/*
+	@Test
+	public void fixJson() throws Exception {
+		// create cloud storage object
+		Configuration configuration = Cloud.configure()
+				.region("eu-central-1")
+				//.credentials(AwsCloud.getCredentialsFromFile("efreet-upload-production"))
+				//.prefix("efreet-snaps-production/ShoppingQueen/cbs")
+				.credentials(AwsCloud.getCredentialsFromFile("geenee-publish"))
+				//.prefix("eu-central.geeneeapi.content/testing/geenee/vox/sq-168/day-3")
+				.prefix("eu-central.geeneeapi.content/production/ShoppingQueen")
+				.build();
+		Cloud cloud = new AwsCloud(configuration);
+		Storage storage = cloud.getStorage();
+
+		String[] files = storage.list("");
+
+		for (String file : files) {
+			if (file.endsWith("/result.json")) {
+
+				try (RandomAccessFile f = new RandomAccessFile("result.json", "rw")) {
+					storage.download(f.getChannel(), file, null);
+
+					// read
+					int size = (int)f.getChannel().size();
+					byte[] data = new byte[size];
+					f.read(data);
+
+					// replace
+					String s = new String(data, "UTF-8");
+					int len = s.length();
+					s = s.replace("\"resolutions\":[],", "");
+					if (s.length() != len) {
+						System.out.println(file);
+						data = s.getBytes("UTF-8");
+
+						// write
+						f.seek(0);
+						f.setLength(0);
+						f.write(data);
+
+						storage.upload(f.getChannel(), file);
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	public void fixJson2() throws Exception {
+		fixJson2(new File("/Volumes/publish/eu-central/production/ShoppingQueen/"));
+	}
+
+	public void fixJson2(File dir) throws Exception {
+		File[] list = dir.listFiles(path -> path.isDirectory() || path.getName().equals("result.json"));
+
+		for (File file : list) {
+			if (file.isDirectory()) {
+				fixJson2(file);
+			} else {
+				try (RandomAccessFile f = new RandomAccessFile(file, "rw")) {
+					System.out.println(file.getPath());
+
+					// read
+					int size = (int)f.getChannel().size();
+					byte[] data = new byte[size];
+					f.read(data);
+
+					// replace
+					String s = new String(data, "UTF-8");
+					s = s.replace("\"resolutions\":[],", "");
+					data = s.getBytes("UTF-8");
+
+					// write
+					f.seek(0);
+					f.setLength(0);
+					f.write(data);
+				}
+			}
+		}
+	}
+*/
 }

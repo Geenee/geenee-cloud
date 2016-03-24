@@ -34,7 +34,7 @@ abstract public class AwsRequest<V> extends HttpFuture<V> {
 		}
 	}
 
-	public AwsRequest(HttpCloud cloud, Configuration configuration, String host, HttpMethod method, String urlPath) {
+	public AwsRequest(HttpCloud cloud, Cloud.Configuration configuration, String host, HttpMethod method, String urlPath) {
 		super(cloud, configuration, host, true);
 		connect(new ListHandler(method, urlPath));
 	}
