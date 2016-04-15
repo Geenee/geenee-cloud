@@ -8,6 +8,8 @@ import java.util.concurrent.ExecutionException;
 
 public interface Compute {
 
+	Cloud.Configuration getConfiguration();
+
 	// instances
 
 	interface Instances {

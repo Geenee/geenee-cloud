@@ -160,7 +160,8 @@ public abstract class HttpFuture<V> implements Future<V> {
 	public static boolean isRetryCode(int responseCode) {
 		return responseCode == 400
 				|| responseCode == 408
-				|| responseCode == 429;
+				|| responseCode == 429
+				|| responseCode == 500;
 	}
 
 	protected abstract class RequestHandler extends Handler {
@@ -202,7 +203,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 					} else {
 						// http error (e.g. 400)
-						//System.err.println(responseCode + ": " + getContentAsString());
+						System.err.println(responseCode + ": " + getContentAsString());
 
 						// transfer has failed, maybe retry is possible
 						setFailed(isRetryCode(responseCode), new HttpException(responseCode));

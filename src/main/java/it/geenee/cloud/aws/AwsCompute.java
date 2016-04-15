@@ -30,6 +30,11 @@ public class AwsCompute implements Compute {
 	// list
 
 	@Override
+	public Cloud.Configuration getConfiguration() {
+		return this.configuration;
+	}
+
+	@Override
 	public Instances list() {
 		return new Instances() {
 			int index = 1;

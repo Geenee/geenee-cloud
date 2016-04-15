@@ -42,7 +42,7 @@ public interface Cloud {
 		}
 
 		public ConfigBuilder user(String user) {
-			this.credentials = user;
+			this.credentials = user != null ? user : "default";
 			return this;
 		}
 

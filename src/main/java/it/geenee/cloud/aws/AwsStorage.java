@@ -29,6 +29,11 @@ public class AwsStorage implements Storage {
 		this.host = host;
 	}
 
+	@Override
+	public Cloud.Configuration getConfiguration() {
+		return this.configuration;
+	}
+
 	/**
 	 * Calculates the Amazon S3 ETag of a file. The algorithm uses the multipart upload chunk size. If the file can be
 	 * uploaded as one part, the ETag is the MD5 hash. If the file has to be uploaded in multiple parts, the algorithm

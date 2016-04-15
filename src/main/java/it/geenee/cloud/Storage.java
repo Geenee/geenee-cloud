@@ -10,6 +10,8 @@ import java.util.concurrent.ExecutionException;
 
 public interface Storage {
 
+	Cloud.Configuration getConfiguration();
+
 	/**
 	 * Calculate hash of a file
 	 * @param file file to calculate the checksum of
