@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -13,7 +12,6 @@ import java.util.concurrent.TimeoutException;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.timeout.*;
@@ -45,7 +43,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 	private Transfer.State state = Transfer.State.INITIATING;
 
 	// set of active channels
-	Set<Channel> channels = new HashSet<>();
+	final Set<Channel> channels = new HashSet<>();
 
 
 	// result value
@@ -363,6 +361,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 		while (!(this.state == Transfer.State.SUCCESS || this.state == Transfer.State.FAILED || this.state == Transfer.State.CANCELLED))
 			wait();
 
+		//TODO: how to rethrow the cause of failure according to specification?
 		//if (this.state == Transfer.State.FAILED)
 		//	throw this.cause;
 		return this;
@@ -375,9 +374,11 @@ public abstract class HttpFuture<V> implements Future<V> {
 			try {
 				wait();
 			} catch (InterruptedException e) {
+				// just try again as this method is not interruptible
 			}
 		}
 
+		//TODO: how to rethrow the cause of failure according to specification?
 		//if (this.state == Transfer.State.FAILED)
 		//		throw this.cause;
 		return this;
@@ -398,6 +399,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 			try {
 				wait();
 			} catch (InterruptedException e) {
+				// just try again as this method is not interruptible
 			}
 		}
 		return this;
@@ -439,6 +441,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 			try {
 				wait(timeoutMillis - passedMillis);
 			} catch (InterruptedException e) {
+				// just try again as this method is not interruptible
 			}
 		}
 
@@ -492,7 +495,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 			else
 				channel.unsafe().closeForcibly();
 
-			// part failed while registering channel
+			// failed while registering channel
 			fail(handler);
 			return;
 		}
@@ -573,15 +576,12 @@ public abstract class HttpFuture<V> implements Future<V> {
 		if (isDone())
 			return;
 
-		// check if number of retries exceeded
+		// check if number of retries exceeded (retry method notifies state change if necessary, e.g. in Upload/DownloadHandler)
 		if (handler.retry(this.configuration.retryCount)) {
 			// transfer has failed
 			setFailed(this.notedCause);
 			return;
 		}
-
-		// notify change of
-		//stateChange();
 
 		// retry after a delay
 		int delay = this.configuration.timeout;

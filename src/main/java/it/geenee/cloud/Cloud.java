@@ -168,6 +168,16 @@ public interface Cloud {
 		b.append(key);
 		b.append(": ");
 	}
+	static StringBuilder append(StringBuilder b, String key, boolean value) {
+		appendKey(b, key);
+		b.append(value);
+		return b;
+	}
+	static StringBuilder append(StringBuilder b, String key, long value) {
+		appendKey(b, key);
+		b.append(value);
+		return b;
+	}
 	static StringBuilder append(StringBuilder b, String key, String value) {
 		appendKey(b, key);
 		if (value != null)
@@ -177,14 +187,12 @@ public interface Cloud {
 			b.append('"');
 		return b;
 	}
-	static StringBuilder append(StringBuilder b, String key, long value) {
+	static StringBuilder append(StringBuilder b, String key, Object value) {
 		appendKey(b, key);
-		b.append(value);
-		return b;
-	}
-	static StringBuilder append(StringBuilder b, String key, boolean value) {
-		appendKey(b, key);
-		b.append(value);
+		if (value == null)
+			b.append((String)null);
+		else
+			b.append(value.toString());
 		return b;
 	}
 }
