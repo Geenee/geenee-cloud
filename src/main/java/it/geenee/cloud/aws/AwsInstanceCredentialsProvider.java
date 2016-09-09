@@ -17,6 +17,10 @@ import it.geenee.cloud.http.HttpCloud;
 public class AwsInstanceCredentialsProvider implements Cloud.CredentialsProvider {
 	static Logger logger = LoggerFactory.getLogger(AwsInstanceCredentialsProvider.class);
 
+	public static final String INFO = "/latest/meta-data/iam/info";
+	public static final String SECURITY_CREDENTIALS = "/latest/meta-data/iam/security-credentials/";
+	public static final int REFRESH_INTERVAL_SECONDS = 10 * 60;
+
 	final HttpCloud.Globals globals;
 	String role;
 	Credentials credentials;
@@ -26,7 +30,7 @@ public class AwsInstanceCredentialsProvider implements Cloud.CredentialsProvider
 
 		// get role name
 		// curl http://instance-data/latest/meta-data/iam/info
-		this.role = (new AwsGetMetadata<String>(globals, "/latest/meta-data/iam/info") {
+		this.role = (new AwsGetMetadata<String>(globals, INFO) {
 
 			@Override
 			protected void done(String path, String value) {
@@ -64,7 +68,7 @@ public class AwsInstanceCredentialsProvider implements Cloud.CredentialsProvider
 				}
 			});
 			setTimeout(timer);
-		}, 10 * 60, TimeUnit.SECONDS);
+		}, REFRESH_INTERVAL_SECONDS, TimeUnit.SECONDS);
 	}
 
 	@Override
@@ -81,7 +85,7 @@ public class AwsInstanceCredentialsProvider implements Cloud.CredentialsProvider
 	AwsGetMetadata<Credentials> startGetCredentials() {
 		// get instance credentials
 		// curl http://instance-data/latest/meta-data/iam/security-credentials/<role>
-		return new AwsGetMetadata<Credentials>(this.globals, "/latest/meta-data/iam/security-credentials/" + this.role) {
+		return new AwsGetMetadata<Credentials>(this.globals, SECURITY_CREDENTIALS + this.role) {
 
 			@Override
 			protected void done(String path, String value) {

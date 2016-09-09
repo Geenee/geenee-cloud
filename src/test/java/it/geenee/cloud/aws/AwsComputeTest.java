@@ -54,7 +54,7 @@ public class AwsComputeTest {
 	public void testInstances() throws Exception {
 		Cloud cloud = new AwsCloud(Cloud.configure()
 				.region(region)
-				//.defaultUser() // first try default user in ~/.aws/credentials
+				.defaultUser() // first try default user in ~/.aws/credentials
 				.instanceRole()); // then try instance role (works if we run on ec2 with assigned role)
 		Compute compute = cloud.getCompute();
 
@@ -73,7 +73,7 @@ public class AwsComputeTest {
 	public void testTags() throws Exception {
 		Cloud cloud = new AwsCloud(Cloud.configure()
 				.region(region)
-				//.defaultUser() // first try default user in ~/.aws/credentials
+				.defaultUser() // first try default user in ~/.aws/credentials
 				.instanceRole()); // then try instance role (works if we run on ec2 with assigned role)
 		Compute compute = cloud.getCompute();
 
