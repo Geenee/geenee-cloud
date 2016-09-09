@@ -11,7 +11,8 @@ import it.geenee.cloud.*;
  */
 public class HttpDownloader extends HttpTransfer {
 
-	public HttpDownloader(HttpCloud cloud, Cloud.Configuration configuration, FileChannel file, String host, final String remotePath, final String requestedVersion) {
+	public HttpDownloader(HttpCloud cloud, Cloud.Configuration configuration, FileChannel file, String host,
+			final String remotePath, final String requestedVersion) {
 		super(cloud, configuration, file, host, HttpCloud.encodePath('/' + configuration.prefix + remotePath));
 
 		final String urlPathAndVersion = cloud.addVersion(this.urlPath, requestedVersion);

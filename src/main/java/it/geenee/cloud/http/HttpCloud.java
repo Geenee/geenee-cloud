@@ -17,6 +17,7 @@ import org.apache.commons.codec.binary.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channel;
 import java.nio.channels.FileChannel;
@@ -25,36 +26,50 @@ import java.security.MessageDigest;
 
 
 public abstract class HttpCloud implements Cloud {
+	// container for global instances
+	public static class Globals {
+		public final SslContext sslCtx;
+		public final EventLoopGroup eventLoopGroup;
+		public final Class<? extends SocketChannel> channelClass;
+		public final HashedWheelTimer timer;
+
+		public Globals(SslContext sslCtx, EventLoopGroup eventLoopGroup, Class<? extends SocketChannel> channelClass,
+				HashedWheelTimer timer) {
+			this.sslCtx = sslCtx;
+			this.eventLoopGroup = eventLoopGroup;
+			this.channelClass = channelClass;
+			this.timer = timer;
+		}
+	}
+
+	// global instances that can be shared with other parts of an application
+	public final Globals globals;
 
 	// configuration
 	public final Configuration configuration;
 
-	public final SslContext sslCtx;
-	public final EventLoopGroup eventLoopGroup;
-	public final Class<? extends SocketChannel> channelClass;
-	public final HashedWheelTimer timer = new HashedWheelTimer();
-
-
 	/**
 	 * Constructor
+	 * @param globals global instances of objects that can be shared
 	 * @param configuration global configuration
-	 * @throws SSLException
 	 */
-	public HttpCloud(Configuration configuration) throws SSLException {
-		this(configuration, new NioEventLoopGroup(), NioSocketChannel.class);
-	}
-	public HttpCloud(Configuration configuration, EventLoopGroup eventLoopGroup, Class<? extends SocketChannel> channelClass) throws SSLException {
+	public HttpCloud(Globals globals, Configuration configuration) {
+		this.globals = globals;
 		this.configuration = configuration;
-		this.sslCtx = SslContextBuilder.forClient()
-				.trustManager(InsecureTrustManagerFactory.INSTANCE).build();
-
-		this.eventLoopGroup = eventLoopGroup;
-		this.channelClass = channelClass;
 	}
 
 	// helpers
 
 	public static final Charset UTF_8 = Charset.forName("UTF-8");
+
+	public static Globals createGobals() throws SSLException {
+		return new Globals(
+				SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build(),
+				new NioEventLoopGroup(),
+				NioSocketChannel.class,
+				new HashedWheelTimer());
+	}
+
 
 	/**
 	 * Calculate hash of given file range
@@ -165,6 +180,15 @@ public abstract class HttpCloud implements Cloud {
 		headers.set(HttpHeaders.Names.CONTENT_LENGTH, length);
 		headers.set(HttpHeaders.Names.CONTENT_MD5, Base64.encodeBase64String(md5(file, offset, length)));
 	}
+
+	/**
+	 * Called when a http request fails. The cloud implementation can change the http status code based on the result
+	 * body, e.g. if a 400 is returned but the reason reported in the body is 401 (unauthorized)
+	 * @param statusCode http error status code
+	 * @param body response body
+	 * @return http error status code
+	 */
+	public abstract int fail(String host, int statusCode, InputStream body) throws Exception;
 
 	/**
 	 * Get hash of file from headers (e.g. from ETag)

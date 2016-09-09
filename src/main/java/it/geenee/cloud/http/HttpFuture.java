@@ -30,7 +30,8 @@ public abstract class HttpFuture<V> implements Future<V> {
 	public static final int HTTPS_PORT = 443;
 
 	// cloud and configuration
-	protected final HttpCloud cloud; // has cloud provider specific extendRequest() funciton
+	protected final HttpCloud.Globals globals;
+	protected final HttpCloud cloud; // has cloud provider specific extendRequest() function
 	protected final Cloud.Configuration configuration;
 
 	// host to connect to
@@ -174,7 +175,8 @@ public abstract class HttpFuture<V> implements Future<V> {
 			FullHttpRequest request = getRequest();
 			HttpHeaders headers = request.headers();
 			headers.set(HttpHeaders.Names.HOST, host);
-			cloud.extendRequest(request, configuration);
+			if (cloud != null)
+				cloud.extendRequest(request, configuration);
 
 			// send the http request
 			ctx.writeAndFlush(request);
@@ -201,7 +203,12 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 					} else {
 						// http error (e.g. 400)
-						System.err.println(responseCode + ": " + getContentAsString());
+
+						// cloud can change the response code based on the response body,
+						// e.g. when 400 is returned instead of 401 (unauthorized)
+						String content2 = getContentAsString();
+						if (cloud != null)
+							responseCode = cloud.fail(host, responseCode, getContent());
 
 						// transfer has failed, maybe retry is possible
 						setFailed(isRetryCode(responseCode), new HttpException(responseCode));
@@ -223,20 +230,29 @@ public abstract class HttpFuture<V> implements Future<V> {
 		abstract protected FullHttpRequest getRequest() throws Exception;
 
 		/**
-		 * Gets called when the http get start was successful
+		 * Gets called when the http request was successful
 		 */
 		abstract protected void success(HttpResponse response) throws Exception;
 	}
 
 
 	public HttpFuture(HttpCloud cloud, Cloud.Configuration configuration, String host, boolean https) {
+		this.globals = cloud.globals;
 		this.cloud = cloud;
 		this.configuration = configuration;
 		this.host = host;
 		this.https = https;
 	}
 
-	// java.util.concurrent.Future<V>
+	public HttpFuture(HttpCloud.Globals globals, Cloud.Configuration configuration, String host, boolean https) {
+		this.globals = globals;
+		this.cloud = null;
+		this.configuration = configuration;
+		this.host = host;
+		this.https = https;
+	}
+
+	// methods of java.util.concurrent.Future<V>
 
 	@Override
 	public synchronized boolean cancel(boolean mayInterruptIfRunning) {
@@ -297,7 +313,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 		throw new CancellationException();
 	}
 
-	// io.netty.util.concurrent.Future<V>
+	// methods of io.netty.util.concurrent.Future<V>
 
 	@Override
 	public synchronized boolean isSuccess() {
@@ -474,7 +490,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 		Channel channel;
 		try {
-			channel = this.cloud.channelClass.newInstance();
+			channel = this.globals.channelClass.newInstance();
 		} catch (Exception e) {
 			setFailed(e);
 			return;
@@ -487,7 +503,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 		// copied from netty Bootstrap
 
 		// register channel
-		final ChannelFuture registerFuture = this.cloud.eventLoopGroup.register(channel);
+		final ChannelFuture registerFuture = this.globals.eventLoopGroup.register(channel);
 		if (registerFuture.cause() != null) {
 			// registering failed
 			if (channel.isRegistered())
@@ -505,7 +521,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 		{
 			// https
 			if (this.https)
-				pipeline.addLast("ssl", this.cloud.sslCtx.newHandler(channel.alloc()));
+				pipeline.addLast("ssl", this.globals.sslCtx.newHandler(channel.alloc()));
 
 			// timeout handler (throws ReadTimeoutException which appears in exceptionCaught() of Handler)
 			//pipeline.addLast("timeout", new ReadTimeoutHandler(timeout));
@@ -585,7 +601,7 @@ public abstract class HttpFuture<V> implements Future<V> {
 
 		// retry after a delay
 		int delay = this.configuration.timeout;
-		this.cloud.timer.newTimeout((timeout) -> connect(handler), delay, TimeUnit.SECONDS);
+		this.globals.timer.newTimeout((timeout) -> connect(handler), delay, TimeUnit.SECONDS);
 	}
 
 	synchronized protected void setFailed(Throwable cause) {
