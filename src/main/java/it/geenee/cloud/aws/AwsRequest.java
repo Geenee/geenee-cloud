@@ -13,30 +13,24 @@ import it.geenee.cloud.http.HttpFuture;
  */
 abstract public class AwsRequest<V> extends HttpFuture<V> {
 
-	class ListHandler extends RequestHandler {
-		HttpMethod method;
-		String urlPath;
-
-		ListHandler(HttpMethod method, String urlPath) {
-			this.method = method;
-			this.urlPath = urlPath;
-		}
-
-		@Override
-		protected FullHttpRequest getRequest() throws Exception {
-			return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, this.method, this.urlPath);
-		}
-
-		@Override
-		protected void success(HttpResponse response) throws Exception {
-			//System.out.println(response.content().toString(HttpCloud.UTF_8));
-			AwsRequest.this.success(getContent());
-		}
-	}
-
 	public AwsRequest(HttpCloud cloud, Cloud.Configuration configuration, String host, HttpMethod method, String urlPath) {
 		super(cloud, configuration, host, true);
-		connect(new ListHandler(method, urlPath));
+		request(method, urlPath);
+	}
+
+	void request(HttpMethod method, String urlPath) {
+		connect(new RequestHandler() {
+			@Override
+			protected FullHttpRequest getRequest() throws Exception {
+				return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, method, urlPath);
+			}
+
+			@Override
+			protected void success(HttpResponse response) throws Exception {
+				//System.out.println(response.content().toString(HttpCloud.UTF_8));
+				AwsRequest.this.success(getContent());
+			}
+		});
 	}
 
 	protected abstract void success(InputStream content) throws Exception;

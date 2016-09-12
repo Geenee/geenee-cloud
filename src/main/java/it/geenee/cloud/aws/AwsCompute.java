@@ -110,7 +110,7 @@ public class AwsCompute implements Compute {
 
 						// either repeat or finished
 						if (response.nextToken != null) {
-							connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken)));
+							request(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken));
 						} else {
 							setSuccess(list);
 						}
@@ -144,7 +144,7 @@ public class AwsCompute implements Compute {
 
 				// either repeat or finished
 				if (response.nextToken != null) {
-					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken)));
+					request(HttpMethod.GET, HttpCloud.addQuery(pathAndQuery, "NextToken", response.nextToken));
 				} else {
 					setSuccess(map);
 				}

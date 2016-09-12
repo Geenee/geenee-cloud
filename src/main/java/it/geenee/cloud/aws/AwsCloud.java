@@ -2,27 +2,27 @@ package it.geenee.cloud.aws;
 
 
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.util.concurrent.Future;
 import it.geenee.cloud.*;
 import org.apache.commons.codec.binary.Hex;
 
 import javax.net.ssl.SSLException;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.Unmarshaller;
+import java.io.*;
 import java.nio.channels.FileChannel;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
 import it.geenee.cloud.http.HttpCloud;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 public class AwsCloud extends HttpCloud {
+	static Logger logger = LoggerFactory.getLogger(AwsCloud.class);
 
 	public static final String DEFAULT_REGION = "us-east-1";
 	public static final Configuration DEFAULT_CONFIGURATION = new Configuration(
@@ -43,7 +43,7 @@ public class AwsCloud extends HttpCloud {
 	 * @throws SSLException
 	 */
 	public AwsCloud() throws SSLException {
-		this(null);
+		this(createGobals(), null);
 	}
 
 	/**
@@ -52,33 +52,58 @@ public class AwsCloud extends HttpCloud {
 	 * @throws SSLException
 	 */
 	public AwsCloud(ConfigBuilder configBuilder) throws SSLException {
-		super(build(DEFAULT_CONFIGURATION, configBuilder));
+		this(createGobals(), configBuilder);
 	}
 
 	/**
 	 * Constructor
+	 * @param globals global instances that can be shared
 	 * @param configBuilder global configuration
-	 * @param eventLoopGroup event loop group to use. Reuse the same event loop group if you can
-	 * @param channelClass channel class, must match the type of eventLoopGroup (Nio or Epoll)
 	 * @throws SSLException
 	 */
-	public AwsCloud(ConfigBuilder configBuilder, EventLoopGroup eventLoopGroup, Class<? extends SocketChannel> channelClass) throws SSLException {
-		super(build(DEFAULT_CONFIGURATION, configBuilder), eventLoopGroup, channelClass);
+	public AwsCloud(Globals globals, ConfigBuilder configBuilder) {
+		super(globals, build(globals, DEFAULT_CONFIGURATION, configBuilder));
 	}
 
-	static Configuration build(Configuration defaultConfiguration, ConfigBuilder configBuilder) {
+	// helpers
+
+	static Configuration build(HttpCloud.Globals globals, Configuration defaultConfiguration,
+			ConfigBuilder configBuilder) {
 		if (configBuilder == null)
 			return defaultConfiguration;
 
-		Credentials credentials = null;
-		if (configBuilder.credentials instanceof Credentials)
-			credentials = (Credentials) configBuilder.credentials;
-		else if (configBuilder.credentials instanceof String)
-			credentials = getCredentialsFromFile((String) configBuilder.credentials);
+		// iterate over credentials provider chain
+		CredentialsProvider credentialsProvider = null;
+		for (Object o : configBuilder.credientialsProviderChain) {
+			if (o instanceof CredentialsProvider) {
+				// credentials are directly given
+				credentialsProvider = (CredentialsProvider) o;
+				break;
+			} else if (o instanceof User) {
+				// try to get credentials for user in ~/.aws/credentials
+				Credentials credentials = getCredentialsFromFile(((User) o).name);
+				if (credentials != null) {
+					credentialsProvider = new ConstantCredentialsProvider(credentials);
+					break;
+				}
+			} else if (o instanceof InstanceRole) {
+				try {
+					credentialsProvider = new AwsInstanceCredentialsProvider(globals);
+					break;
+				} catch (Throwable e) {
+					// something went wrong, try next provider
+				}
+			}
+		}
+		if (credentialsProvider == null && !configBuilder.credientialsProviderChain.isEmpty()) {
+			// failed to obtain credentials
+			throw new IllegalArgumentException("Unable to obtain credentials from provider chain " +
+					configBuilder.credientialsProviderChain.toString());
+		}
 
 		return defaultConfiguration.merge(new Configuration(
 				configBuilder.region,
-				credentials,
+				credentialsProvider,
 				configBuilder.timeout,
 				configBuilder.retryCount,
 				configBuilder.partSize,
@@ -136,17 +161,20 @@ public class AwsCloud extends HttpCloud {
 		} catch (IOException e) {
 		}
 
-		if (accessKey != null && secretAccessKey != null)
+		if (accessKey != null && secretAccessKey != null) {
+			logger.info("using credentials from ~/.aws/credentials for user '{}'", user);
 			return new Credentials(accessKey, secretAccessKey);
+		}
 
-		throw new IllegalArgumentException("No AWS profile named '" + user + '\'');
+		return null;
+		//throw new IllegalArgumentException("No AWS profile named '" + user + '\'');
 	}
 
 	// this instance
 
 	@Override
 	public Future<InstanceInfo> startGetInstance() {
-		return new AwsGetInstance(this);
+		return new AwsGetInstance(this.globals);
 	}
 
 	// compute
@@ -154,7 +182,7 @@ public class AwsCloud extends HttpCloud {
 	@Override
 	public AwsCompute getCompute(ConfigBuilder configBuilder) {
 		// merge global configuration with given configuration
-		Configuration configuration = build(this.configuration, configBuilder);
+		Configuration configuration = build(this.globals, this.configuration, configBuilder);
 		String host = getHost("ec2", configuration.region);
 		return new AwsCompute(this, configuration, host);
 	}
@@ -164,7 +192,7 @@ public class AwsCloud extends HttpCloud {
 	@Override
 	public AwsStorage getStorage(ConfigBuilder configBuilder) {
 		// merge global configuration with given configuration
-		Configuration configuration = build(this.configuration, configBuilder);
+		Configuration configuration = build(this.globals, this.configuration, configBuilder);
 		String host = getHost("s3", configuration.region);
 		return new AwsStorage(this, configuration, host);
 	}
@@ -193,6 +221,7 @@ public class AwsCloud extends HttpCloud {
 	public void signRequest(HttpRequest request, byte[] contentSha256, Configuration configuration) throws Exception {
 		boolean useQuery = false;
 		HttpHeaders headers = request.headers();
+		Credentials credentials = configuration.credentialsProvider.getCredentials();
 
 		// hex encode SHA-256 hash of content and set header
 		String contentSha256Hex = Hex.encodeHexString(contentSha256);
@@ -204,6 +233,10 @@ public class AwsCloud extends HttpCloud {
 		String date = time.substring(0, 8);
 		if (!useQuery)
 			headers.set("x-amz-date", time);
+
+		// set token to header
+		if (credentials.token != null)
+			headers.set("x-amz-security-token", credentials.token);
 
 		// get request method (e.g. "GET")
 		String method = request.getMethod().name();
@@ -222,9 +255,9 @@ public class AwsCloud extends HttpCloud {
 		String scope = date + '/' + configuration.region + '/' + service + "/aws4_request";
 
 		// credential
-		String credential = configuration.credentials.accessKey + '/' + scope;
+		String credential = credentials.accessKey + '/' + scope;
 
-		// canonical headers
+		// canonical headers (sorted, will be signed)
 		TreeMap<String, String> canonicalHeaders = new TreeMap<>();
 		for (Map.Entry<String, String> entry : headers.entries()) {
 			canonicalHeaders.put(entry.getKey().toLowerCase(Locale.ENGLISH), entry.getValue());
@@ -290,7 +323,7 @@ public class AwsCloud extends HttpCloud {
 		String stringToSign = "AWS4-HMAC-SHA256\n" + time + '\n' + scope + '\n' + Hex.encodeHexString(sha256(canonicalRequest));
 
 		// build signing key
-		byte[] dateKey = sha256Mac("AWS4" + configuration.credentials.secretAccessKey, date);
+		byte[] dateKey = sha256Mac("AWS4" + credentials.secretAccessKey, date);
 		byte[] dateRegionKey = sha256Mac(dateKey, configuration.region);
 		byte[] dateRegionServiceKey = sha256Mac(dateRegionKey, service);
 		byte[] signingKey = sha256Mac(dateRegionServiceKey, "aws4_request");
@@ -313,7 +346,7 @@ public class AwsCloud extends HttpCloud {
 	@Override
 	public void extendRequest(FullHttpRequest request, Configuration configuration) throws Exception {
 		super.extendRequest(request, configuration);
-		if (configuration.credentials != null) {
+		if (configuration.credentialsProvider != null) {
 			// calc sha-256 of content
 			ByteBuf content = request.content();
 			byte[] data = content.array();
@@ -329,13 +362,64 @@ public class AwsCloud extends HttpCloud {
 	@Override
 	public void extendRequest(HttpRequest request, FileChannel file, long offset, long length, Configuration configuration) throws Exception {
 		super.extendRequest(request, file, offset, length, configuration);
-		if (configuration.credentials != null) {
+		if (configuration.credentialsProvider != null) {
 			// calc sha-256 of content file
 			byte[] contentSha256 = sha256(file, offset, length);
 
 			// sign request
 			signRequest(request, contentSha256, configuration);
 		}
+	}
+
+	@Override
+	public int fail(String host, int statusCode, InputStream body) throws Exception {
+		// get service (e.g. "s3") from host
+		String service = host.substring(0, host.indexOf('.'));
+		switch (service) {
+		case "s3": {
+				// http://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
+				// parse xml
+				JAXBContext jc = JAXBContext.newInstance(S3Error.class);
+				Unmarshaller unmarshaller = jc.createUnmarshaller();
+				S3Error error = (S3Error) unmarshaller.unmarshal(body);
+
+				// patch http status code according to s3 error code
+				switch (error.code) {
+				case "AccessDenied":
+				case "ExpiredToken":
+					statusCode = 403; // forbidden
+					break;
+				}
+
+				logger.error("http: {}, s3: {}, message: {}", statusCode, error.code, error.message);
+			}
+			break;
+		case "ec2": {
+				// http://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html
+				// parse xml
+				JAXBContext jc = JAXBContext.newInstance(Ec2Error.class);
+				Unmarshaller unmarshaller = jc.createUnmarshaller();
+				Ec2Error response = (Ec2Error) unmarshaller.unmarshal(body);
+
+				// iterate over errors
+				if (response.errors != null) {
+					if (response.errors.errors != null) {
+						for (Ec2Error.Error error : response.errors.errors) {
+							// patch http status code according to ec2 error code
+							switch (error.code) {
+							case "RequestExpired":
+								statusCode = 403; // forbidden
+								break;
+							}
+							logger.error("http: {}, ec2: {}, message: {}", statusCode, error.code, error.message);
+						}
+					}
+				}
+			}
+			break;
+		}
+
+		return statusCode;
 	}
 
 	@Override
