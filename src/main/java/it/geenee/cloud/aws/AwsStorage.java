@@ -119,7 +119,7 @@ public class AwsStorage implements Storage {
 				// either repeat or finished
 				if (result.isTruncated && result.contents != null) {
 					String marker = result.contents.get(result.contents.size()-1).key;
-					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker)));
+					request(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker));
 				} else {
 					setSuccess(this.list);
 				}
@@ -160,7 +160,7 @@ public class AwsStorage implements Storage {
 					// either repeat or finished
 					if (result.isTruncated && result.contents != null) {
 						String marker = result.contents.get(result.contents.size() - 1).key;
-						connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker)));
+						request(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker));
 					} else {
 						setSuccess(this.list);
 					}
@@ -233,7 +233,7 @@ public class AwsStorage implements Storage {
 						String p = urlPath;
 						p = HttpCloud.addQuery(p, "key-marker", result.keyMarker);
 						p = HttpCloud.addQuery(p, "version-id-marker", result.versionIdMarker);
-						connect(new ListHandler(HttpMethod.GET, p));
+						request(HttpMethod.GET, p);
 					} else {
 						setSuccess(list);
 					}
@@ -265,7 +265,7 @@ public class AwsStorage implements Storage {
 				// either repeat or finished
 				if (result.isTruncated) {
 					String marker = result.contents.get(result.contents.size()-1).key;
-					connect(new ListHandler(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker)));
+					request(HttpMethod.GET, HttpCloud.addQuery(urlPath, "marker", marker));
 				} else {
 					setSuccess(this.map);
 				}
@@ -301,7 +301,7 @@ public class AwsStorage implements Storage {
 					String p = urlPath;
 					p = HttpCloud.addQuery(p, "key-marker", result.nextKeyMarker);
 					p = HttpCloud.addQuery(p, "upload-id-marker", result.nextUploadIdMarker);
-					connect(new ListHandler(HttpMethod.GET, p));
+					request(HttpMethod.GET, p);
 				} else {
 					setSuccess(list);
 				}

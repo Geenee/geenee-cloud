@@ -2,6 +2,7 @@ package it.geenee.cloud;
 
 import io.netty.util.concurrent.Future;
 
+import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 
 public interface Cloud {
@@ -15,9 +16,29 @@ public interface Cloud {
 		return new ConfigBuilder();
 	}
 
+	class User {
+		public String name;
+
+		public User(String name) {
+			this.name = name;
+		}
+
+		@Override
+		public String toString() {
+			return this.name == null ? "default user" : "user: " + this.name;
+		}
+	}
+
+	class InstanceRole {
+		@Override
+		public String toString() {
+			return "instance role";
+		}
+	}
+
 	class ConfigBuilder {
 		public String region = null;
-		public Object credentials =  null;
+		public ArrayList<Object> credientialsProviderChain = new ArrayList<>();
 		public int timeout = 0;
 		public int retryCount = 0;
 
@@ -31,18 +52,37 @@ public interface Cloud {
 			return this;
 		}
 
-		public ConfigBuilder credentials(Credentials credentials) {
-			this.credentials = credentials;
-			return this;
-		}
-
+		// explicitly set credentials
 		public ConfigBuilder credentials(String accessKey, String secretAccessKey) {
-			this.credentials = new Credentials(accessKey, secretAccessKey);
+			return credentials(new Credentials(accessKey, secretAccessKey));
+		}
+
+		// explicitly set credentials
+		public ConfigBuilder credentials(Credentials credentials) {
+			return credentials(new ConstantCredentialsProvider(credentials));
+		}
+
+		// explicitly set credentials provider
+		public ConfigBuilder credentials(CredentialsProvider credentialsProvider) {
+			this.credientialsProviderChain.add(credentialsProvider);
 			return this;
 		}
 
-		public ConfigBuilder user(String user) {
-			this.credentials = user != null ? user : "default";
+		// set default user, credentials are obtained from configuration file (~/.aws/credentials)
+		public ConfigBuilder defaultUser() {
+			this.credientialsProviderChain.add(new User(null));
+			return this;
+		}
+
+		// set user name, credentials are obtained from configuration file (~/.aws/credentials)
+		public ConfigBuilder user(String name) {
+			this.credientialsProviderChain.add(new User(name));
+			return this;
+		}
+
+		// set role, credentials are obtained from instance metadata (curl http://169.254.169.254/latest/meta-data/iam/security-credentials/<name>)
+		public ConfigBuilder instanceRole() {
+			this.credientialsProviderChain.add(new InstanceRole());
 			return this;
 		}
 
@@ -84,9 +124,25 @@ public interface Cloud {
 		}
 	}
 
+	interface CredentialsProvider {
+		Credentials getCredentials();
+	}
+
+	class ConstantCredentialsProvider implements CredentialsProvider {
+		Credentials credentials;
+
+		public ConstantCredentialsProvider(Credentials credentials) {
+			this.credentials = credentials;
+		}
+
+		public Credentials getCredentials() {
+			return this.credentials;
+		}
+	}
+
 	class Configuration {
 		public final String region;
-		public final Credentials credentials;
+		public final CredentialsProvider credentialsProvider;
 		public final int timeout;
 		public final int retryCount;
 
@@ -95,9 +151,10 @@ public interface Cloud {
 		public final int channelCount;
 		public final String prefix;
 
-		public Configuration(String region, Credentials credentials, int timeout, int retryCount, int partSize, int channelCount, String prefix) {
+		public Configuration(String region, CredentialsProvider credentialsProvider, int timeout, int retryCount,
+				int partSize, int channelCount, String prefix) {
 			this.region = region;
-			this.credentials = credentials;
+			this.credentialsProvider = credentialsProvider;
 			this.timeout = timeout;
 			this.retryCount = retryCount;
 			this.partSize = partSize;
@@ -110,7 +167,7 @@ public interface Cloud {
 				return this;
 			return new Configuration(
 					configuration.region != null ? configuration.region : this.region,
-					configuration.credentials != null ? configuration.credentials : this.credentials,
+					configuration.credentialsProvider != null ? configuration.credentialsProvider : this.credentialsProvider,
 					configuration.timeout > 0 ? configuration.timeout : this.timeout,
 					configuration.retryCount > 0 ? configuration.retryCount : this.retryCount,
 					configuration.partSize > 0 ? configuration.partSize : this.partSize,

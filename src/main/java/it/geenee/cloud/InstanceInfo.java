@@ -16,8 +16,10 @@ public class InstanceInfo {
 	// region (AWS: e.g. "us-east-1")
 	public final String region;
 
-	// public and private ip address
+	// private ip address
 	public final String privateIpAddress;
+
+	// public ip address
 	public final String ipAddress;
 
 
